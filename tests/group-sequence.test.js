@@ -1,0 +1,3 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {runGroupSequence} from '../dist/group-sequence.js';
+test('groups execute serially with exactly 3000ms between attempts, including failures',async()=>{const events=[];const result=await runGroupSequence(['a','b','c'],async id=>{events.push(id);if(id==='b')throw Error('permission')},()=>{},async ms=>events.push(ms));assert.deepEqual(events,['a',3000,'b',3000,'c']);assert.deepEqual(result.map(r=>r.ok),[true,false,true]);assert.equal(result[1].error,'permission')});
+test('one group has no unnecessary final delay',async()=>{await runGroupSequence(['a'],async()=>{},()=>{},()=>{throw Error('Unexpected delay')})});

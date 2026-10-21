@@ -1,6 +1,6 @@
 const {AccountSessions,partitionFor}=require('./account-sessions.cjs');
 const {startMetadataMonitor}=require('./whatsapp-metadata.cjs');
-const {app,BrowserWindow,protocol,net,ipcMain,Tray,Menu,WebContentsView,session,Notification,shell,clipboard,safeStorage}=require('electron');
+const {app,BrowserWindow,protocol,net,ipcMain,Tray,Menu,WebContentsView,session,Notification,nativeTheme,shell,clipboard,safeStorage}=require('electron');
 const {createTranslationService}=require('./translation-service.cjs');
 const {startTranslationMonitor}=require('./translation-runtime.cjs');
 const {createProxyService}=require('./proxy-service.cjs');
@@ -36,21 +36,25 @@ else {
   ipcMain.handle('translation-test',(e,id)=>{trusted(e);return translationService.translate(id,'send','Hello, how are you?')});
   ipcMain.handle('notification-test',e=>{trusted(e);if(!Notification.isSupported())throw Error('当前系统不支持桌面通知');new Notification({title:'ZL Multi Manager',body:'Windows 通知已接入',icon:path.join(__dirname,'icon.png')}).show();return true});
   const prefFile=path.join(app.getPath('userData'),'desktop-settings.json');
-  try{const p=JSON.parse(fs.readFileSync(prefFile,'utf8'));prefs={closeBehavior:p.closeBehavior==='exit'?'exit':'tray',autoStart:p.autoStart===true}}catch{}
+  try{const p=JSON.parse(fs.readFileSync(prefFile,'utf8'));prefs={...prefs,closeBehavior:p.closeBehavior==='exit'?'exit':'tray',autoStart:p.autoStart===true,theme:['system','light','dark'].includes(p.theme)?p.theme:(prefs.theme||'system')}}catch{}
   protocol.handle('zl',request=>{
    const url=new URL(request.url),root=path.join(__dirname,'ui');
    let file;try{file=path.resolve(root,'.'+decodeURIComponent(url.pathname==='/'?'/index.html':url.pathname))}catch{return new Response('',{status:400})}
    if(url.host!=='app'||!file.startsWith(root+path.sep))return new Response('',{status:403});
    return net.fetch(pathToFileURL(file).href);
   });
+  nativeTheme.themeSource=prefs.theme||'system';
   win=new BrowserWindow({width:1280,height:850,minWidth:900,minHeight:600,show:false,frame:true,...(process.platform==='win32'?{titleBarStyle:'hidden',titleBarOverlay:{color:'#111310',symbolColor:'#d2d6cf',height:30}}:{}),title:'ZL Multi Manager',icon:path.join(__dirname,'icon.png'),webPreferences:{preload:path.join(__dirname,'preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true}});
+  function paintTitlebar(){if(process.platform==='win32'&&!win.isDestroyed())win.setTitleBarOverlay({color:nativeTheme.shouldUseDarkColors?'#111310':'#f5f7fa',symbolColor:nativeTheme.shouldUseDarkColors?'#d2d6cf':'#26364b',height:30})}
+  nativeTheme.on('updated',paintTitlebar);paintTitlebar();
+  ipcMain.handle('theme-set',(e,value)=>{trusted(e);if(!['system','light','dark'].includes(value))throw Error('Invalid theme');nativeTheme.themeSource=value;prefs.theme=value;fs.writeFileSync(prefFile,JSON.stringify(prefs));paintTitlebar();return true});
   win.setMenuBarVisibility(false);
   // Bounded local diagnostics: application states only, never page text, cookies or messages.
   const sessionDiagnostics=[];
   function recordSessionStatus(status){
    sessionDiagnostics.push({time:new Date().toISOString(),account:partitionFor(status.platform,status.id),state:status.state,message:status.message,metadataSync:status.metadataSync,avatarStatus:status.metadata?.avatarStatus,avatarSource:status.metadata?.avatarSource});
    if(sessionDiagnostics.length>200)sessionDiagnostics.shift();
-   try{fs.writeFileSync(path.join(app.getPath('userData'),'session-diagnostics.json'),JSON.stringify({build:'0.2.0-R9',electron:process.versions.electron,chrome:process.versions.chrome,events:sessionDiagnostics},null,2))}catch{}
+   try{fs.writeFileSync(path.join(app.getPath('userData'),'session-diagnostics.json'),JSON.stringify({build:'0.2.0-R10',electron:process.versions.electron,chrome:process.versions.chrome,events:sessionDiagnostics},null,2))}catch{}
   }
   const proxyService=createProxyService({directory:app.getPath('userData'),safeStorage,session});let lastAccounts=[];
   const accounts=new AccountSessions({configureProxy:proxyService.configure,win,WebContentsView,session,startMetadataMonitor,startTranslationMonitor:(wc,id)=>startTranslationMonitor(wc,id,translationService),notify:status=>{recordSessionStatus(status);notifyAccount(status);if(!win.isDestroyed())win.webContents.send('account-status',status)}});
@@ -71,7 +75,7 @@ else {
   win.webContents.session.setPermissionRequestHandler((wc,permission,callback)=>callback(false));
   function trusted(e){if(e.sender!==win.webContents||e.senderFrame!==win.webContents.mainFrame||!e.senderFrame.url.startsWith('zl://app/'))throw Error('Untrusted sender')}
   ipcMain.handle('window-control',(e,command)=>{trusted(e);if(command==='minimize')win.minimize();else if(command==='maximize')win.isMaximized()?win.unmaximize():win.maximize();else if(command==='close')win.close()});
-  ipcMain.handle('preferences',(e,p)=>{trusted(e);prefs={closeBehavior:p.closeBehavior==='exit'?'exit':'tray',autoStart:p.autoStart===true};fs.writeFileSync(prefFile,JSON.stringify(prefs));if(process.platform==='win32')app.setLoginItemSettings({openAtLogin:prefs.autoStart});return prefs});
+  ipcMain.handle('preferences',(e,p)=>{trusted(e);prefs={...prefs,closeBehavior:p.closeBehavior==='exit'?'exit':'tray',autoStart:p.autoStart===true,theme:['system','light','dark'].includes(p.theme)?p.theme:(prefs.theme||'system')};fs.writeFileSync(prefFile,JSON.stringify(prefs));if(process.platform==='win32')app.setLoginItemSettings({openAtLogin:prefs.autoStart});return prefs});
   tray=new Tray(path.join(__dirname,'icon.png'));tray.setToolTip('ZL Multi Manager');
   tray.setContextMenu(Menu.buildFromTemplate([{label:'打开 ZL',click:()=>win.show()},{label:'退出软件',click:()=>app.quit()}]));tray.on('double-click',()=>win.show());
   win.on('close',e=>{if(!quitting&&prefs.closeBehavior==='tray'){e.preventDefault();win.hide()}});

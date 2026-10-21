@@ -1,4 +1,6 @@
+import {runGroupSequence} from './group-sequence.js';
 import {readHistory as history,writeTask as save,renderHistory} from './native-history.js';
+let groupTaskRunning=false;
 const el=(tag,cls,text)=>{const e=document.createElement(tag);e.className=cls||'';if(text!==undefined)e.textContent=text;return e};
 const button=(text,fn)=>{const b=el('button','button quiet',text);b.type='button';b.onclick=fn;return b};
 export function openNativeTool(tool,state,status){
@@ -17,7 +19,11 @@ export function openNativeTool(tool,state,status){
  for(const [value,label] of groups?[['all','全部'],['open','已开群'],['closed','已闭群']]:[['all','全部'],['group','群聊'],['private','私聊']]){const b=button(label,()=>{filter=value;draw()});b.dataset.filter=value;q('.nt-tabs').append(b)}
  q('.nt-search').oninput=draw;q('.nt-all').onchange=e=>{for(const r of visible())e.target.checked?selected.add(r.id):selected.delete(r.id);draw()};
  q('.nt-header').append(button('刷新列表',()=>{if(!busy)load()}),button('关闭',()=>d.close()));
- async function apply(closed){if(busy)return;const targets=rows.filter(r=>selected.has(r.id));if(!targets.length){feedback('请先选择群组');return}busy=true;accounts();draw();let ok=0;const errors=[];for(const r of targets){try{await run({action:'group-mode',chatId:r.id,closed});r.closed=closed;ok++}catch(e){errors.push(r.name+'：'+e.message)}}busy=false;accounts();draw();feedback('完成 '+ok+' / '+targets.length+'。'+errors.join('；'))}
+ async function apply(closed){if(busy)return;if(groupTaskRunning){feedback('已有群组任务正在执行，请等待完成后再操作');return}const targets=rows.filter(r=>selected.has(r.id));if(!targets.length){feedback('请先选择群组');return}groupTaskRunning=true;busy=true;accounts();draw();q('.nt-compose').querySelectorAll('button').forEach(b=>b.disabled=true);
+  try{const results=await runGroupSequence(targets,async r=>{await run({action:'group-mode',chatId:r.id,closed});r.closed=closed},p=>feedback(p.phase==='waiting'?'已处理 '+(p.index+1)+' / '+p.total+'，等待 3 秒后继续…':'正在'+(closed?'闭群':'开群')+' '+(p.index+1)+' / '+p.total+'：'+p.target.name));
+   const errors=results.filter(r=>!r.ok);feedback('执行完毕：成功 '+(results.length-errors.length)+' / '+results.length+(errors.length?'；失败：'+errors.map(r=>r.target.name+'：'+r.error).join('；'):''));
+  }finally{groupTaskRunning=false;busy=false;accounts();draw();q('.nt-compose').querySelectorAll('button').forEach(b=>b.disabled=false)}
+ }
  if(groups){q('.nt-compose').append(button('全员禁言',()=>apply(true)),button('开启发言',()=>apply(false)))}else{
   const type=el('select'),text=el('textarea'),file=el('input'),name=el('input'),phone=el('input');text.placeholder='消息内容';text.rows=5;file.type='file';name.placeholder='名片姓名';phone.placeholder='含国家区号的电话号码';
   for(const [value,label] of [['text','文本'],['image','图片'],['caption','图文'],['video','视频'],['file','文件'],['contact','名片']]){const o=el('option','',label);o.value=value;type.append(o)}
