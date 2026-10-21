@@ -60,7 +60,7 @@ Section "Install"
   CreateShortcut "$SMPROGRAMS\ZL Multi Manager\Uninstall.lnk" "$INSTDIR\Uninstall.exe"
   WriteRegStr HKCU "Software\ZL Multi Manager" "InstallDir" "$INSTDIR"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\ZLMultiManager" "DisplayName" "ZL Multi Manager"
-  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\ZLMultiManager" "DisplayVersion" "0.2.0-R10"
+  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\ZLMultiManager" "DisplayVersion" "0.2.0-R11"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\ZLMultiManager" "UninstallString" '$\"$INSTDIR\Uninstall.exe$\"'
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\ZLMultiManager" "DisplayIcon" "$INSTDIR\ZL Multi Manager.exe"
 SectionEnd

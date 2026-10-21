@@ -1,9 +1,13 @@
 const {AccountSessions,partitionFor}=require('./account-sessions.cjs');
 const {startMetadataMonitor}=require('./whatsapp-metadata.cjs');
-const {app,BrowserWindow,protocol,net,ipcMain,Tray,Menu,WebContentsView,session,Notification,nativeTheme,shell,clipboard,safeStorage}=require('electron');
+const {app,BrowserWindow,protocol,net,ipcMain,Tray,Menu,WebContentsView,session,Notification,nativeTheme,dialog,shell,clipboard,safeStorage}=require('electron');
 const {createTranslationService}=require('./translation-service.cjs');
 const {startTranslationMonitor}=require('./translation-runtime.cjs');
 const {createProxyService}=require('./proxy-service.cjs');
+const {bindAccountNotification}=require('./account-notifications.cjs');
+const {createUpdateService}=require('./update-service.cjs');
+const {createHistoryService}=require('./history-service.cjs');
+const {spawn}=require('node:child_process');
 const {measureNetwork}=require('./network-status.cjs');
 const {runAction,validateAction}=require('./whatsapp-actions.cjs');
 const path=require('node:path'),fs=require('node:fs'),{pathToFileURL}=require('node:url');
@@ -20,7 +24,7 @@ else {
   if(process.platform==='win32'){try{const shortcut=path.join(app.getPath('appData'),'Microsoft/Windows/Start Menu/Programs/ZL Multi Manager/ZL Multi Manager.lnk');shell.writeShortcutLink(shortcut,'update',{target:process.execPath,description:'ZL Multi Manager',icon:path.join(path.dirname(process.execPath),'icon.ico'),iconIndex:0,appUserModelId:'ZL.MultiManager'})}catch{}}
   let lastNetwork=null;ipcMain.handle('network-status',async e=>{trusted(e);try{lastNetwork=await measureNetwork((url,options)=>net.fetch(url,options));return lastNetwork}catch{lastNetwork=null;throw Error('公网 IP 检测失败，请检查网络')}});
   ipcMain.handle('copy-network-ip',e=>{trusted(e);if(lastNetwork)clipboard.writeText(lastNetwork.ip)});
-  const notificationStates=new Map();
+  const notificationStates=new Map(),accountNotifications=new Set();
   function notifyAccount(status){
    const previous=notificationStates.get(status.key),now={unread:status.metadata?.unreadCount,failed:['error','blocked','incompatible'].includes(status.state),authenticated:status.metadata?.authenticated};notificationStates.set(status.key,now);
    if(!Notification.isSupported()||status.state==='sleeping'||!previous)return;
@@ -28,7 +32,7 @@ else {
    const lost=(now.failed&&!previous.failed)||(previous.authenticated===true&&now.authenticated===false);
    if(!unread&&!lost)return;
    const n=new Notification({title:lost?'WhatsApp 连接异常':'WhatsApp 新消息',body:lost?'点击查看对应账号。':(status.metadata?.nickname||'WhatsApp 账号')+' 有 '+now.unread+' 条未读消息',icon:path.join(__dirname,'icon.png')});
-   n.on('click',()=>{win.show();win.focus();win.webContents.send('select-account',{platform:status.platform,id:status.id})});n.show();
+   accountNotifications.add(n);bindAccountNotification(n,win,status,item=>accountNotifications.delete(item));n.show();
   }
   const translationService=createTranslationService({directory:app.getPath('userData'),safeStorage,fetch:(url,options)=>net.fetch(url,options)});
   ipcMain.handle('translation-get',(e,id)=>{trusted(e);return translationService.publicConfig(id)});
@@ -54,10 +58,24 @@ else {
   function recordSessionStatus(status){
    sessionDiagnostics.push({time:new Date().toISOString(),account:partitionFor(status.platform,status.id),state:status.state,message:status.message,metadataSync:status.metadataSync,avatarStatus:status.metadata?.avatarStatus,avatarSource:status.metadata?.avatarSource});
    if(sessionDiagnostics.length>200)sessionDiagnostics.shift();
-   try{fs.writeFileSync(path.join(app.getPath('userData'),'session-diagnostics.json'),JSON.stringify({build:'0.2.0-R10',electron:process.versions.electron,chrome:process.versions.chrome,events:sessionDiagnostics},null,2))}catch{}
+   try{fs.writeFileSync(path.join(app.getPath('userData'),'session-diagnostics.json'),JSON.stringify({build:'0.2.0-R11',electron:process.versions.electron,chrome:process.versions.chrome,events:sessionDiagnostics},null,2))}catch{}
   }
   const proxyService=createProxyService({directory:app.getPath('userData'),safeStorage,session});let lastAccounts=[];
   const accounts=new AccountSessions({configureProxy:proxyService.configure,win,WebContentsView,session,startMetadataMonitor,startTranslationMonitor:(wc,id)=>startTranslationMonitor(wc,id,translationService),notify:status=>{recordSessionStatus(status);notifyAccount(status);if(!win.isDestroyed())win.webContents.send('account-status',status)}});
+  const history=createHistoryService({directory:app.getPath('userData'),defaultExport:path.join(app.getPath('documents'),'ZL-Chat-Exports'),safeStorage,accounts,translation:translationService});
+  app.on('before-quit',()=>history.close());
+  ipcMain.handle('history-get',e=>{trusted(e);return history.get()});
+  ipcMain.handle('history-save',(e,v)=>{trusted(e);return history.save(v)});
+  ipcMain.handle('history-directory',async e=>{trusted(e);const r=await dialog.showOpenDialog(win,{properties:['openDirectory','createDirectory']});return r.canceled?null:r.filePaths[0]});
+  ipcMain.handle('history-open',async e=>{trusted(e);const directory=history.get().directory;fs.mkdirSync(directory,{recursive:true});const error=await shell.openPath(directory);if(error)throw Error(error);return true});
+  ipcMain.handle('history-sync',(e,v)=>{trusted(e);return history.sync(v.ids,v.days)});
+  ipcMain.handle('history-export',async(e,v)=>{trusted(e);const result=history.exportHTML(v?.date);const error=await shell.openPath(result.directory);return {...result,openError:error||''}});
+  ipcMain.handle('cache-stats',e=>{trusted(e);return translationService.cacheStats()});
+  ipcMain.handle('cache-clear',async e=>{trusted(e);translationService.clearCache();for(const item of accounts.items.values())if(item.platform==='whatsapp'&&item.view)try{await item.view.webContents.executeJavaScript("globalThis.__zlTranslation?.seen.clear();document.querySelectorAll('.zl-received-translation').forEach(e=>e.remove())")}catch{}return true});
+  ipcMain.handle('performance-get',e=>{trusted(e);const metrics=app.getAppMetrics();return {cpu:metrics.reduce((n,m)=>n+(m.cpu?.percentCPUUsage||0),0),memory:metrics.reduce((n,m)=>n+(m.memory?.workingSetSize||0)*1024,0),processes:metrics.length,uptime:process.uptime()}});
+  const updater=createUpdateService({fetch:(u,o)=>net.fetch(u,o),directory:path.join(app.getPath('userData'),'updates'),currentVersion:'0.2.0-R11',launch:file=>new Promise((resolve,reject)=>{if(process.platform!=='win32'){reject(Error('在线安装仅支持 Windows'));return}const child=spawn(file,[],{detached:true,stdio:'ignore'});child.once('error',()=>reject(Error('无法启动更新安装程序')));child.once('spawn',()=>{child.unref();resolve()})}),quit:()=>{quitting=true;app.quit()}});
+  ipcMain.handle('update-check',e=>{trusted(e);return updater.check()});
+  ipcMain.handle('update-install',e=>{trusted(e);return updater.install(progress=>{if(!win.isDestroyed())win.webContents.send('update-progress',progress)})});
   for(const event of ['resize','move','maximize','unmaximize','restore'])win.on(event,()=>{accounts.paint();win.webContents.send('layout-request')});
   app.on('before-quit',()=>accounts.dispose());
   ipcMain.handle('accounts-sync',(e,items)=>{trusted(e);lastAccounts=items;return accounts.sync(items.map(a=>({...a,proxyRevision:proxyService.revision(a.platform+':'+a.id)})))});

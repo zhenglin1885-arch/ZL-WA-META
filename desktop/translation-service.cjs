@@ -7,11 +7,12 @@ function cleanConfig(value){
 }
 function createTranslationService({directory,safeStorage,fetch}){
  const file=path.join(directory,'translation-service.json');let stored={accounts:{},keys:{}};try{const data=JSON.parse(fs.readFileSync(file,'utf8'));if(data.accounts&&data.keys)stored=data}catch{}
+ const cache=new Map();let cacheGeneration=0;const cacheKey=(id,direction,text)=>{const c=get(id);return JSON.stringify([c.provider,c.model,direction==='receive'?c.receiveLanguage:c.sendLanguage,text])};
  const defaults={provider:'google',sendEnabled:false,receiveEnabled:false,previewEnabled:false,sendLanguage:'en',receiveLanguage:'zh-CN',model:''};
  const get=id=>({...defaults,...stored.accounts[id]});
  function publicConfig(id){return {...get(id),hasKey:!!stored.keys[get(id).provider]}}
  function save(id,value,apiKey){if(typeof id!=='string'||!id||id.length>150)throw Error('账号无效');const config=cleanConfig(value),next=JSON.parse(JSON.stringify(stored));if(['openai','gemini'].includes(config.provider)&&!config.model.trim())throw Error('请填写该服务可用的模型名称');if(apiKey){if(typeof apiKey!=='string'||apiKey.length>4000)throw Error('API Key 无效');if(!safeStorage.isEncryptionAvailable())throw Error('系统密钥加密不可用，未保存');next.keys[config.provider]=safeStorage.encryptString(apiKey).toString('base64')}if(config.provider!=='google'&&(config.sendEnabled||config.receiveEnabled)&&!next.keys[config.provider])throw Error('此翻译服务尚未配置 API Key');next.accounts[id]=config;fs.writeFileSync(file+'.tmp',JSON.stringify(next));fs.renameSync(file+'.tmp',file);stored=next;return publicConfig(id)}
- async function translate(id,direction,text){
+ async function requestTranslation(id,direction,text){
   const config=get(id);if(typeof text!=='string'||!text.trim()||text.length>10000)throw Error('翻译文本为空或超过 10000 字符');
   if(config.provider==='google')return googleFreeTranslate(fetch,text,direction==='receive'?config.receiveLanguage:config.sendLanguage);
   if(!stored.keys[config.provider])throw Error(config.provider==='deepl'?'DeepL 免费 API 仍需免费 Key，请在 DeepL 开发者页面申请':'请先配置翻译服务 API Key');
@@ -26,7 +27,9 @@ function createTranslationService({directory,safeStorage,fetch}){
   const result=await response.json();let translated=config.provider==='google'?result.data?.translations?.[0]?.translatedText:config.provider==='deepl'?result.translations?.[0]?.text:config.provider==='openai'?result.choices?.[0]?.message?.content:result.candidates?.[0]?.content?.parts?.map(p=>p.text||'').join('');
   if(typeof translated!=='string'||!translated.trim())throw Error('翻译服务没有返回译文');return translated;
  }
- return {get,publicConfig,save,translate};
+ async function translate(id,direction,text){const key=cacheKey(id,direction,text);if(cache.has(key))return cache.get(key);const generation=cacheGeneration;const value=await requestTranslation(id,direction,text);if(generation!==cacheGeneration)return value;cache.set(key,value);if(cache.size>1000)cache.delete(cache.keys().next().value);return value}
+ const lookup=(id,direction,text)=>cache.get(cacheKey(id,direction,text));
+ return {get,publicConfig,save,translate,lookup,cacheStats:()=>({count:cache.size,bytes:Buffer.byteLength(JSON.stringify([...cache]))}),clearCache:()=>{cacheGeneration++;cache.clear()}};
 }
 async function googleFreeTranslate(fetch,text,target){
  if(text.length>5000)throw Error('Google 免费通道单次最多 5000 字符');

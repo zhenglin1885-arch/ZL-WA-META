@@ -32,7 +32,10 @@
       "whatsapp-actions.cjs",
       "translation-service.cjs",
       "translation-runtime.cjs",
-      "proxy-service.cjs"
+      "proxy-service.cjs",
+      "history-service.cjs",
+      "update-service.cjs",
+      "account-notifications.cjs"
     ],
     "win": {
       "target": "nsis",
