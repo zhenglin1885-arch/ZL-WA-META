@@ -3,11 +3,11 @@ const PROVIDERS=['google','deepl','openai','gemini'];
 function cleanConfig(value){
  if(!value||!PROVIDERS.includes(value.provider))throw Error('请选择翻译服务');
  if(!/^[a-zA-Z]{2,3}(?:-[a-zA-Z]{2,4})?$/.test(value.sendLanguage)||!/^[a-zA-Z]{2,3}(?:-[a-zA-Z]{2,4})?$/.test(value.receiveLanguage))throw Error('请选择目标语言');
- return {provider:value.provider,sendEnabled:value.sendEnabled===true,receiveEnabled:value.receiveEnabled===true,sendLanguage:value.sendLanguage,receiveLanguage:value.receiveLanguage,model:typeof value.model==='string'?value.model.slice(0,100):''};
+ return {provider:value.provider,sendEnabled:value.sendEnabled===true,receiveEnabled:value.receiveEnabled===true,previewEnabled:value.previewEnabled===true,sendLanguage:value.sendLanguage,receiveLanguage:value.receiveLanguage,model:typeof value.model==='string'?value.model.slice(0,100):''};
 }
 function createTranslationService({directory,safeStorage,fetch}){
  const file=path.join(directory,'translation-service.json');let stored={accounts:{},keys:{}};try{const data=JSON.parse(fs.readFileSync(file,'utf8'));if(data.accounts&&data.keys)stored=data}catch{}
- const defaults={provider:'google',sendEnabled:false,receiveEnabled:false,sendLanguage:'en',receiveLanguage:'zh-CN',model:''};
+ const defaults={provider:'google',sendEnabled:false,receiveEnabled:false,previewEnabled:false,sendLanguage:'en',receiveLanguage:'zh-CN',model:''};
  const get=id=>({...defaults,...stored.accounts[id]});
  function publicConfig(id){return {...get(id),hasKey:!!stored.keys[get(id).provider]}}
  function save(id,value,apiKey){if(typeof id!=='string'||!id||id.length>150)throw Error('账号无效');const config=cleanConfig(value),next=JSON.parse(JSON.stringify(stored));if(['openai','gemini'].includes(config.provider)&&!config.model.trim())throw Error('请填写该服务可用的模型名称');if(apiKey){if(typeof apiKey!=='string'||apiKey.length>4000)throw Error('API Key 无效');if(!safeStorage.isEncryptionAvailable())throw Error('系统密钥加密不可用，未保存');next.keys[config.provider]=safeStorage.encryptString(apiKey).toString('base64')}if(config.provider!=='google'&&(config.sendEnabled||config.receiveEnabled)&&!next.keys[config.provider])throw Error('此翻译服务尚未配置 API Key');next.accounts[id]=config;fs.writeFileSync(file+'.tmp',JSON.stringify(next));fs.renameSync(file+'.tmp',file);stored=next;return publicConfig(id)}

@@ -50,7 +50,7 @@ else {
   function recordSessionStatus(status){
    sessionDiagnostics.push({time:new Date().toISOString(),account:partitionFor(status.platform,status.id),state:status.state,message:status.message,metadataSync:status.metadataSync,avatarStatus:status.metadata?.avatarStatus,avatarSource:status.metadata?.avatarSource});
    if(sessionDiagnostics.length>200)sessionDiagnostics.shift();
-   try{fs.writeFileSync(path.join(app.getPath('userData'),'session-diagnostics.json'),JSON.stringify({build:'0.2.0-R8',electron:process.versions.electron,chrome:process.versions.chrome,events:sessionDiagnostics},null,2))}catch{}
+   try{fs.writeFileSync(path.join(app.getPath('userData'),'session-diagnostics.json'),JSON.stringify({build:'0.2.0-R9',electron:process.versions.electron,chrome:process.versions.chrome,events:sessionDiagnostics},null,2))}catch{}
   }
   const proxyService=createProxyService({directory:app.getPath('userData'),safeStorage,session});let lastAccounts=[];
   const accounts=new AccountSessions({configureProxy:proxyService.configure,win,WebContentsView,session,startMetadataMonitor,startTranslationMonitor:(wc,id)=>startTranslationMonitor(wc,id,translationService),notify:status=>{recordSessionStatus(status);notifyAccount(status);if(!win.isDestroyed())win.webContents.send('account-status',status)}});
