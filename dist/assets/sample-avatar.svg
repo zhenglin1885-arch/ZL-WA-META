@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80" viewBox="0 0 80 80">
+  <title>示例账号插画头像</title>
+  <defs><clipPath id="circle"><circle cx="40" cy="40" r="40"/></clipPath></defs>
+  <g clip-path="url(#circle)">
+    <path fill="#6a5e50" d="M0 0h80v80H0z"/>
+    <path fill="#292625" d="M18 48V29C18 11 28 6 40 6s23 8 23 26v30H18z"/>
+    <path fill="#d6b5a0" d="M32 47h16v21H32z"/>
+    <path fill="#b4917d" d="M32 47h16v10c-4 4-12 2-16-1z"/>
+    <path fill="#eee8e0" d="M9 83c0-18 9-27 23-29l8 9 8-9c14 3 24 13 25 29z"/>
+    <path fill="#dbc0ad" d="M24 30c0-13 6-19 16-19s17 8 17 20v9c0 13-8 20-17 20S24 52 24 40z"/>
+    <path fill="#302926" d="M22 32c-1-19 8-24 18-24 16 0 23 12 19 29-1-9-5-16-10-20-7 8-16 11-27 15z"/>
+    <path stroke="#675044" stroke-width="1.5" stroke-linecap="round" d="M30 36h3m14 0h3"/>
+    <path stroke="#a67468" stroke-width="1.5" fill="none" stroke-linecap="round" d="M36 48q4 3 8 0"/>
+    <path fill="#342e2a" d="M23 31c-1 15 4 26 9 31l-10 5c-7-14-9-27-5-36z"/>
+  </g>
+</svg>

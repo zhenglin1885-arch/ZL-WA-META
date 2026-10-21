@@ -1,0 +1,5 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {sampleManagedGroups,filterManagedGroups,changeSampleGroupMode} from '../dist/group-manager-model.js';
+test('群组账户隔离，开闭分类随权限模式变化',()=>{const groups=[...sampleManagedGroups('a'),...sampleManagedGroups('b')],accounts=new Set(['a']);assert.equal(new Set(groups.map(g=>g.id)).size,6);assert.equal(filterManagedGroups(groups,accounts,'open').length,2);const targets=new Set(filterManagedGroups(groups,accounts,'open').map(g=>g.id));assert.equal(changeSampleGroupMode(groups,targets,true),2);assert.equal(filterManagedGroups(groups,accounts,'closed').length,3);assert.equal(filterManagedGroups(groups,new Set(['b']),'open').length,2);changeSampleGroupMode(groups,targets,false);assert.equal(filterManagedGroups(groups,accounts,'open').length,2)});
+test('非管理员不改变群组权限，搜索只返回所选账户',()=>{const groups=sampleManagedGroups('a');groups[0].admin=false;assert.equal(changeSampleGroupMode(groups,new Set([groups[0].id]),true),0);assert.equal(groups[0].closed,false);assert.equal(filterManagedGroups(groups,new Set(['a']),'all','售后').length,1);assert.equal(filterManagedGroups(groups,new Set(),'all').length,0)});

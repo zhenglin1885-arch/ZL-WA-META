@@ -1,0 +1,49 @@
+{
+  "name": "zl-multi-manager",
+  "version": "0.2.0",
+  "private": true,
+  "description": "ZL Multi Manager official web session desktop",
+  "author": "ZL",
+  "main": "main.cjs",
+  "scripts": {
+    "prepare-ui": "node prepare-ui.cjs",
+    "dist:win": "npm run prepare-ui && electron-builder --win nsis --x64",
+    "start": "npm run prepare-ui && electron ."
+  },
+  "devDependencies": {
+    "electron": "44.9.0",
+    "electron-builder": "26.15.3"
+  },
+  "build": {
+    "appId": "com.zl.multimanager.test",
+    "productName": "ZL Multi Manager",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "main.cjs",
+      "preload.cjs",
+      "ui/**/*",
+      "icon.png",
+      "account-sessions.cjs",
+      "whatsapp-metadata.cjs",
+      "vendor/**/*",
+      "network-status.cjs",
+      "whatsapp-actions.cjs",
+      "translation-service.cjs",
+      "translation-runtime.cjs"
+    ],
+    "win": {
+      "target": "nsis",
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "artifactName": "ZL-Multi-Manager-Setup.exe",
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "deleteAppDataOnUninstall": false
+    }
+  }
+}

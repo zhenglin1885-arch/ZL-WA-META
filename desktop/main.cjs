@@ -1,0 +1,74 @@
+const {AccountSessions,partitionFor}=require('./account-sessions.cjs');
+const {startMetadataMonitor}=require('./whatsapp-metadata.cjs');
+const {app,BrowserWindow,protocol,net,ipcMain,Tray,Menu,WebContentsView,session,Notification,shell,clipboard,safeStorage}=require('electron');
+const {createTranslationService}=require('./translation-service.cjs');
+const {startTranslationMonitor}=require('./translation-runtime.cjs');
+const {measureNetwork}=require('./network-status.cjs');
+const {runAction,validateAction}=require('./whatsapp-actions.cjs');
+const path=require('node:path'),fs=require('node:fs'),{pathToFileURL}=require('node:url');
+protocol.registerSchemesAsPrivileged([{scheme:'zl',privileges:{standard:true,secure:true,supportFetchAPI:true}}]);
+let win,tray,quitting=false,prefs={closeBehavior:'tray',autoStart:false};
+if(!app.requestSingleInstanceLock())app.quit();
+else {
+ app.on('second-instance',(_event,argv)=>{if(argv.includes('--quit-for-maintenance')){quitting=true;app.quit();return}win?.show();win?.focus()});
+ app.on('before-quit',()=>quitting=true);
+ app.whenReady().then(()=>{
+  if(process.argv.includes('--quit-for-maintenance')){app.quit();return}
+  app.setAppUserModelId('com.zl.multimanager.test');
+  if(process.platform==='win32'){try{const shortcut=path.join(app.getPath('appData'),'Microsoft/Windows/Start Menu/Programs/ZL Multi Manager/ZL Multi Manager.lnk');shell.writeShortcutLink(shortcut,'update',{target:process.execPath,appUserModelId:'com.zl.multimanager.test'})}catch{}}
+  let lastNetwork=null;ipcMain.handle('network-status',async e=>{trusted(e);try{lastNetwork=await measureNetwork((url,options)=>net.fetch(url,options));return lastNetwork}catch{lastNetwork=null;throw Error('公网 IP 检测失败，请检查网络')}});
+  ipcMain.handle('copy-network-ip',e=>{trusted(e);if(lastNetwork)clipboard.writeText(lastNetwork.ip)});
+  const notificationStates=new Map();
+  function notifyAccount(status){
+   const previous=notificationStates.get(status.key),now={unread:status.metadata?.unreadCount,failed:['error','blocked','incompatible'].includes(status.state),authenticated:status.metadata?.authenticated};notificationStates.set(status.key,now);
+   if(!Notification.isSupported()||status.state==='sleeping'||!previous)return;
+   const unread=Number.isInteger(now.unread)&&Number.isInteger(previous.unread)&&now.unread>previous.unread;
+   const lost=(now.failed&&!previous.failed)||(previous.authenticated===true&&now.authenticated===false);
+   if(!unread&&!lost)return;
+   const n=new Notification({title:lost?'WhatsApp 连接异常':'WhatsApp 新消息',body:lost?'点击查看对应账号。':(status.metadata?.nickname||'WhatsApp 账号')+' 有 '+now.unread+' 条未读消息',icon:path.join(__dirname,'icon.png')});
+   n.on('click',()=>{win.show();win.focus();win.webContents.send('select-account',{platform:status.platform,id:status.id})});n.show();
+  }
+  const translationService=createTranslationService({directory:app.getPath('userData'),safeStorage,fetch:(url,options)=>net.fetch(url,options)});
+  ipcMain.handle('translation-get',(e,id)=>{trusted(e);return translationService.publicConfig(id)});
+  ipcMain.handle('translation-save',(e,value)=>{trusted(e);return translationService.save(value.accountId,value.config,value.apiKey)});
+  ipcMain.handle('translation-test',(e,id)=>{trusted(e);return translationService.translate(id,'send','Hello, how are you?')});
+  ipcMain.handle('notification-test',e=>{trusted(e);if(!Notification.isSupported())throw Error('当前系统不支持桌面通知');new Notification({title:'ZL Multi Manager',body:'Windows 通知已接入',icon:path.join(__dirname,'icon.png')}).show();return true});
+  const prefFile=path.join(app.getPath('userData'),'desktop-settings.json');
+  try{const p=JSON.parse(fs.readFileSync(prefFile,'utf8'));prefs={closeBehavior:p.closeBehavior==='exit'?'exit':'tray',autoStart:p.autoStart===true}}catch{}
+  protocol.handle('zl',request=>{
+   const url=new URL(request.url),root=path.join(__dirname,'ui');
+   let file;try{file=path.resolve(root,'.'+decodeURIComponent(url.pathname==='/'?'/index.html':url.pathname))}catch{return new Response('',{status:400})}
+   if(url.host!=='app'||!file.startsWith(root+path.sep))return new Response('',{status:403});
+   return net.fetch(pathToFileURL(file).href);
+  });
+  win=new BrowserWindow({width:1280,height:850,minWidth:900,minHeight:600,show:false,frame:true,...(process.platform==='win32'?{titleBarStyle:'hidden',titleBarOverlay:{color:'#111310',symbolColor:'#d2d6cf',height:30}}:{}),title:'ZL Multi Manager',icon:path.join(__dirname,'icon.png'),webPreferences:{preload:path.join(__dirname,'preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true}});
+  win.setMenuBarVisibility(false);
+  // Bounded local diagnostics: application states only, never page text, cookies or messages.
+  const sessionDiagnostics=[];
+  function recordSessionStatus(status){
+   sessionDiagnostics.push({time:new Date().toISOString(),account:partitionFor(status.platform,status.id),state:status.state,message:status.message,metadataSync:status.metadataSync,avatarStatus:status.metadata?.avatarStatus,avatarSource:status.metadata?.avatarSource});
+   if(sessionDiagnostics.length>200)sessionDiagnostics.shift();
+   try{fs.writeFileSync(path.join(app.getPath('userData'),'session-diagnostics.json'),JSON.stringify({build:'0.2.0-R6',electron:process.versions.electron,chrome:process.versions.chrome,events:sessionDiagnostics},null,2))}catch{}
+  }
+  const accounts=new AccountSessions({win,WebContentsView,session,startMetadataMonitor,startTranslationMonitor:(wc,id)=>startTranslationMonitor(wc,id,translationService),notify:status=>{recordSessionStatus(status);notifyAccount(status);if(!win.isDestroyed())win.webContents.send('account-status',status)}});
+  for(const event of ['resize','move','maximize','unmaximize','restore'])win.on(event,()=>{accounts.paint();win.webContents.send('layout-request')});
+  app.on('before-quit',()=>accounts.dispose());
+  ipcMain.handle('accounts-sync',(e,items)=>{trusted(e);return accounts.sync(items)});
+  ipcMain.handle('accounts-layout',(e,layout)=>{trusted(e);accounts.setLayout(layout)});
+  ipcMain.handle('whatsapp-action',(e,request)=>{trusted(e);return runAction(accounts,request)});
+  ipcMain.handle('validate-message',(e,request)=>{trusted(e);validateAction(request);return true});
+  ipcMain.handle('task-complete',(e,counts)=>{trusted(e);if(Notification.isSupported()){new Notification({title:'转发任务完成',body:'已提交 '+Math.max(0,Number(counts.submitted)||0)+'；失败 '+Math.max(0,Number(counts.failed)||0),icon:path.join(__dirname,'icon.png')}).show()}});
+  ipcMain.handle('accounts-reload',(e,platform,id)=>{trusted(e);accounts.reload(platform,id)});
+  win.webContents.setWindowOpenHandler(()=>({action:'deny'}));
+  win.webContents.on('will-navigate',(e,url)=>{if(!url.startsWith('zl://app/'))e.preventDefault()});
+  win.webContents.session.setPermissionRequestHandler((wc,permission,callback)=>callback(false));
+  function trusted(e){if(e.sender!==win.webContents||e.senderFrame!==win.webContents.mainFrame||!e.senderFrame.url.startsWith('zl://app/'))throw Error('Untrusted sender')}
+  ipcMain.handle('window-control',(e,command)=>{trusted(e);if(command==='minimize')win.minimize();else if(command==='maximize')win.isMaximized()?win.unmaximize():win.maximize();else if(command==='close')win.close()});
+  ipcMain.handle('preferences',(e,p)=>{trusted(e);prefs={closeBehavior:p.closeBehavior==='exit'?'exit':'tray',autoStart:p.autoStart===true};fs.writeFileSync(prefFile,JSON.stringify(prefs));if(process.platform==='win32')app.setLoginItemSettings({openAtLogin:prefs.autoStart});return prefs});
+  tray=new Tray(path.join(__dirname,'icon.png'));tray.setToolTip('ZL Multi Manager');
+  tray.setContextMenu(Menu.buildFromTemplate([{label:'打开 ZL',click:()=>win.show()},{label:'退出软件',click:()=>app.quit()}]));tray.on('double-click',()=>win.show());
+  win.on('close',e=>{if(!quitting&&prefs.closeBehavior==='tray'){e.preventDefault();win.hide()}});
+  win.once('ready-to-show',()=>win.show());win.loadURL('zl://app/index.html');
+ });
+ app.on('window-all-closed',()=>app.quit());
+}

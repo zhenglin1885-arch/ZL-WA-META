@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="zh-CN" class="license-locked" data-entry="main">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#121412">
+  <meta name="description" content="ZL Multi Manager 账号与环境管理。建立环境、设置账号备注，管理 WhatsApp 与 Facebook Business 的分组、账号和环境配置。">
+  <title>ZL Multi Manager</title>
+  <link rel="stylesheet" href="./styles.css">
+  <link rel="stylesheet" href="./system-settings.css">
+  <link rel="stylesheet" href="./group-manager.css">
+  <script type="module" src="./offline-bootstrap.js"></script>
+<link rel="stylesheet" href="./offline-license.css">
+</head>
+<body>
+  <header class="titlebar">
+    <div class="brand"><b>ZL</b><span>Multi Manager</span><span class="demo-tag">账号管理</span></div>
+    <div class="network"><span>IP: —</span><span><i class="status-dot gray"></i> — ms</span><button class="icon-button" id="networkRefresh" title="网络检测待桌面版接入" aria-label="网络检测说明" data-icon="refresh"></button><div class="window-controls" role="group" aria-label="窗口控制（桌面版）"><button type="button" class="window-control" data-window-control="最小化" title="最小化（桌面版）" aria-label="最小化（桌面版）" data-icon="minimize"></button><button type="button" class="window-control" data-window-control="最大化" title="最大化（桌面版）" aria-label="最大化（桌面版）" data-icon="maximize"></button><button type="button" class="window-control window-close" data-window-control="关闭至托盘" title="关闭至托盘（桌面版）" aria-label="关闭至托盘（桌面版）" data-icon="close"></button></div></div>
+  </header>
+  <div class="app-shell">
+    <nav class="app-rail" aria-label="应用导航"><div class="rail-logo">ZL</div><div class="rail-icon home" data-icon="home" title="主界面"></div><button type="button" class="rail-icon platform-button active" data-platform="whatsapp" data-icon="whatsapp" title="WhatsApp" aria-label="WhatsApp" aria-pressed="true"></button><button type="button" class="rail-icon platform-button" data-platform="facebook" data-icon="meta" title="Facebook Business" aria-label="Facebook Business" aria-pressed="false"></button><div class="rail-spacer"></div><button class="rail-icon rail-help system-settings-trigger" id="railHelp" title="系统设置" aria-label="系统设置" data-icon="settings"></button></nav>
+    <aside class="account-sidebar" id="accountSidebar">
+      <div class="sidebar-heading"><span id="platformHeading" title="WhatsApp">WhatsApp</span><button class="icon-button sidebar-toggle" id="toggleSidebar" type="button" title="收起账号栏" aria-label="收起账号栏" aria-expanded="true" aria-controls="accountSidebar" data-icon="menu"></button></div>
+      <button class="button blue new-group-button" id="newGroup" type="button" aria-haspopup="dialog" aria-controls="groupPopover" aria-expanded="false"><span data-icon="plus"></span>新增分组</button>
+      <div class="group-scroll" id="groupList"></div>
+      <div class="sidebar-bottom"><span id="bottomCount">0 个环境</span><span>本浏览器保存配置</span></div>
+    </aside>
+    <main class="official-zone">
+      <div class="official-toolbar"><div class="official-title"><span id="platformToolbarIcon" data-icon="whatsapp"></span><div><strong id="platformToolbarTitle">WhatsApp</strong><span id="selectedLabel">官方界面区域</span></div></div><div class="official-actions"><button type="button" class="button quiet" id="openChatDemo" hidden>对话预览</button><button class="button quiet" id="editEnvironment" hidden><span data-icon="sliders"></span>环境配置</button><button class="icon-button" id="sleepButton" hidden title="休眠 / 唤醒" aria-label="休眠或唤醒当前账号" data-icon="moon"></button></div></div>
+      <section class="stage" id="stage"></section>
+      <aside class="tool-drawer" id="toolDrawer" hidden role="dialog" aria-labelledby="drawerTitle"><div class="drawer-head"><strong id="drawerTitle"></strong><button class="icon-button" id="closeDrawer" aria-label="关闭工具浮窗" data-icon="close"></button></div><div id="drawerBody" class="drawer-body"></div></aside>
+    </main>
+    <aside class="tool-rail" aria-label="工具"><button class="tool" data-tool="proxy" aria-pressed="false" aria-expanded="false" aria-controls="toolDrawer"><span class="tool-circle" data-icon="network"></span><span>代理</span></button><button class="tool" data-tool="translate" aria-pressed="false" aria-expanded="false" aria-controls="toolDrawer"><span class="tool-circle" data-icon="translate"></span><span>翻译</span></button><button class="tool" data-tool="forward" aria-pressed="false" aria-expanded="false" aria-controls="toolDrawer"><span class="tool-circle" data-icon="send"></span><span>转发</span></button><button class="tool" data-tool="groups" aria-haspopup="dialog"><span class="tool-circle"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="9" cy="8" r="3"/><path d="M3 21v-3a6 6 0 0 1 12 0v3M16 5a3 3 0 0 1 0 6M18 14a5 5 0 0 1 3 5v2"/></svg></span><span>群组</span></button></aside>
+  </div>
+  <footer class="statusbar"><span><i class="status-dot amber"></i><span id="platformStatus">请创建或选择会话。</span></span><span>环境数量不设固定上限 · 实际多开取决于电脑性能</span></footer>
+
+  <dialog class="environment-dialog" id="environmentDialog" aria-labelledby="environmentTitle">
+    <form id="environmentForm" novalidate>
+      <header class="dialog-header"><div><div class="eyebrow">ZL ENVIRONMENT</div><h1 id="environmentTitle">建立独立环境 <span class="demo-tag">环境配置</span></h1></div><button class="icon-button" type="button" id="closeEnvironment" aria-label="关闭环境配置" data-icon="close"></button></header>
+      <div class="config-layout">
+        <div class="config-main">
+          <div class="tabs" role="tablist" aria-label="环境配置分类"><button type="button" role="tab" class="tab active" id="tab-basic" aria-selected="true" aria-controls="panel-basic" data-tab="basic">基本信息</button><button type="button" role="tab" class="tab" id="tab-fingerprint" aria-selected="false" aria-controls="panel-fingerprint" data-tab="fingerprint">指纹配置</button><button type="button" role="tab" class="tab" id="tab-proxy" aria-selected="false" aria-controls="panel-proxy" data-tab="proxy">代理配置</button></div>
+          <div class="tab-scroll">
+            <section class="tab-panel" role="tabpanel" id="panel-basic" aria-labelledby="tab-basic">
+              <div class="section-intro"><h2>一个账号，一个独立环境</h2><p>为即将登录的账号填写本地备注，并选择所属分组。</p></div>
+              <div class="form-row"><label for="accountRemark">账号备注</label><div class="control"><input id="accountRemark" name="remark" maxlength="100" placeholder="例如：巴西客户跟进"><p class="field-hint">显示在左侧账号卡片的第三行，可留空。</p></div></div>
+              <div class="form-row"><label for="environmentGroup">所属分组</label><div class="control"><select id="environmentGroup" name="groupId"></select></div></div>
+              <div class="form-row"><label>会话数据</label><div class="control"><div class="isolation-card"><span class="isolation-icon" data-icon="layers"></span><div><strong>独立持久会话</strong><p>正式桌面版为每个环境单独保存登录状态、Cookie 和缓存。</p></div><span class="capability desktop">桌面版接入</span></div></div></div>
+              <div class="form-row"><label>环境数量</label><div class="control"><div class="plain-value">不设置固定数量上限</div><p class="field-hint">可同时运行的数量取决于电脑内存、CPU 和各账号负载。</p></div></div>
+              <div class="next-card"><span>继续配置此环境的浏览器标识与代理。</span><button class="button quiet" type="button" data-go-tab="fingerprint">指纹配置 <span data-icon="arrow"></span></button></div>
+            </section>
+            <section class="tab-panel" role="tabpanel" id="panel-fingerprint" aria-labelledby="tab-fingerprint" hidden>
+              <div class="form-row"><label for="fingerprintEnabled">指纹配置</label><div class="control inline-control"><label class="switch"><input type="checkbox" id="fingerprintEnabled" name="fingerprintEnabled"><span></span></label><span class="field-hint">每个环境独立保存参数</span></div></div>
+              <div class="fingerprint-fields" id="fingerprintFields">
+                <div class="form-row"><label for="browserEngine">浏览器内核</label><div class="control"><select id="browserEngine" disabled><option>Chromium · 随桌面内核</option></select><p class="field-hint">实际版本由桌面版提供，不伪造内核版本。</p></div></div>
+                <div class="form-row"><label>系统标识</label><div class="control"><div class="segmented" data-segment="os" aria-label="系统标识"><button type="button" data-value="windows">▦ Windows</button><button type="button" data-value="macos">● macOS</button></div><p class="field-hint">修改浏览器标识，不会改变电脑实际操作系统。</p></div></div>
+                <div class="form-row"><label for="uaMode">User Agent</label><div class="control"><select id="uaMode" name="uaMode"><option value="auto">随桌面内核自动生成</option><option value="custom">自定义 User Agent</option></select><textarea id="userAgent" name="userAgent" rows="3" placeholder="桌面版根据内核与系统标识生成一致的 User Agent" disabled></textarea><p class="field-hint">更改 User Agent 不等于模拟一台真实设备。</p></div></div>
+                <div class="form-row"><label for="browserLanguage">浏览器语言</label><div class="control"><select id="browserLanguage" name="language"><option value="system">跟随系统</option><option value="zh-CN">简体中文 · zh-CN</option><option value="en-US">English · en-US</option><option value="pt-BR">Português · pt-BR</option><option value="es-ES">Español · es-ES</option></select></div></div>
+                <div class="form-row"><label>时区</label><div class="control"><div class="segmented" data-segment="timezoneMode" aria-label="时区模式"><button type="button" data-value="system">真实</button><button type="button" data-value="ip">基于 IP</button><button type="button" data-value="custom">自定义</button></div><input id="timezone" name="timezone" list="timezones" placeholder="例如：America/Sao_Paulo" hidden><datalist id="timezones"><option value="America/Sao_Paulo"><option value="America/Bahia"><option value="America/New_York"><option value="Europe/Amsterdam"><option value="Asia/Shanghai"><option value="UTC"></datalist><p class="field-hint" id="timezoneHint">沿用设备真实时区。</p></div></div>
+                <div class="form-row"><label for="screenSize">屏幕尺寸</label><div class="control"><select id="screenSize" name="screen"><option value="real">真实设备</option><option value="1920x1080">1920 × 1080</option><option value="1366x768">1366 × 768</option><option value="2560x1440">2560 × 1440</option></select><p class="field-hint">配置展示；屏幕参数覆盖需桌面内核支持。</p></div></div>
+                <div class="advanced-heading"><span>高级指纹</span><span class="capability">需内核支持 · 尚未应用</span></div>
+                <div class="form-row"><label>WebGL 元数据</label><div class="control"><div class="segmented" data-segment="webgl" aria-label="WebGL 元数据"><button type="button" data-value="real">真实</button><button type="button" data-value="off">关闭硬件加速</button><button type="button" data-value="custom">自定义</button></div><div class="gpu-box" id="gpuBox" hidden><label for="webglVendor">厂商</label><input id="webglVendor" name="webglVendor" placeholder="填写厂商标识"><label for="webglRenderer">渲染器</label><input id="webglRenderer" name="webglRenderer" placeholder="填写渲染器标识"></div></div></div>
+                <div class="form-row"><label>WebGPU</label><div class="control"><div class="segmented" data-segment="webgpu" aria-label="WebGPU"><button type="button" data-value="webgl">基于 WebGL</button><button type="button" data-value="real">真实</button><button type="button" data-value="disabled">禁用</button></div></div></div>
+                <div class="form-row"><label>WebGL 图像</label><div class="control"><div class="segmented" data-segment="webglImage" aria-label="WebGL 图像"><button type="button" data-value="real">真实</button><button type="button" data-value="noise">噪声</button></div></div></div>
+                <div class="form-row"><label>Canvas</label><div class="control"><div class="segmented" data-segment="canvas" aria-label="Canvas"><button type="button" data-value="real">真实</button><button type="button" data-value="noise">噪声</button></div><p class="field-hint">噪声选项仅保存配置，当前尚未修改浏览器输出。</p></div></div>
+                <div class="form-row"><label>AudioContext</label><div class="control"><div class="segmented" data-segment="audio" aria-label="AudioContext"><button type="button" data-value="real">真实</button><button type="button" data-value="noise">噪声</button></div></div></div>
+                <div class="form-row"><label for="webrtc">WebRTC</label><div class="control"><select id="webrtc" name="webrtc"><option value="default">真实 / 默认</option><option value="disable_non_proxied_udp">限制非代理 UDP</option><option value="disabled">禁用（需内核支持）</option></select></div></div>
+                <div class="form-row"><label>地理位置</label><div class="control"><div class="segmented" data-segment="geolocation" aria-label="地理位置"><button type="button" data-value="ask">询问</button><button type="button" data-value="deny">禁止</button><button type="button" data-value="custom">自定义</button></div><div class="coordinate-fields" id="coordinateFields" hidden><input name="latitude" id="latitude" type="number" step="any" min="-90" max="90" placeholder="纬度 −90 ~ 90" aria-label="纬度"><input name="longitude" id="longitude" type="number" step="any" min="-180" max="180" placeholder="经度 −180 ~ 180" aria-label="经度"></div></div></div>
+                <div class="form-row"><label for="cpuCores">硬件并发数</label><div class="control"><select id="cpuCores" name="cpu"><option value="real">跟随真实设备</option><option value="2">2</option><option value="4">4</option><option value="8">8</option><option value="16">16</option></select></div></div>
+                <div class="form-row"><label for="deviceMemory">设备内存</label><div class="control"><select id="deviceMemory" name="memory"><option value="real">跟随真实设备</option><option value="2">2 GB</option><option value="4">4 GB</option><option value="8">8 GB</option></select></div></div>
+              </div>
+            </section>
+            <section class="tab-panel" role="tabpanel" id="panel-proxy" aria-labelledby="tab-proxy" hidden>
+              <div class="section-intro"><h2>环境独立代理</h2><p>可手动填写，也可以从代理链接导入配置。</p></div>
+              <div class="form-row"><label for="environmentProxyEnabled">启用代理</label><div class="control inline-control"><label class="switch"><input type="checkbox" id="environmentProxyEnabled" name="proxyEnabled"><span></span></label><span class="field-hint">关闭时保留填写的代理信息。</span></div></div>
+              <div class="form-row"><label for="proxyImport">代理链接</label><div class="control"><div class="import-row"><input id="proxyImport" type="password" autocomplete="new-password" placeholder="scheme://user:pass@host:port" aria-label="待解析的代理链接"><button type="button" class="button quiet" id="importProxy">解析</button></div><p class="field-hint">支持 HTTP、HTTPS、SOCKS5；解析不代表连接成功。</p><p id="proxyImportError" class="inline-error" role="status"></p></div></div>
+              <div class="form-row"><label for="proxyType">代理类型</label><div class="control"><select id="proxyType" name="proxyType"><option value="direct">不使用代理</option><option value="http">HTTP</option><option value="https">HTTPS</option><option value="socks5">SOCKS5</option></select></div></div>
+              <div id="proxyFields" hidden>
+                <div class="form-row"><label for="proxyHost">主机地址</label><div class="control"><input id="proxyHost" name="proxyHost" placeholder="代理域名或 IP" autocomplete="off"></div></div>
+                <div class="form-row"><label for="proxyPort">端口</label><div class="control"><input id="proxyPort" name="proxyPort" type="number" min="1" max="65535" placeholder="1 ~ 65535"></div></div>
+                <div class="form-row"><label for="proxyUsername">用户名</label><div class="control"><input id="proxyUsername" name="proxyUsername" autocomplete="off" placeholder="可选"></div></div>
+                <div class="form-row"><label for="proxyPassword">密码</label><div class="control"><input id="proxyPassword" type="password" autocomplete="new-password" placeholder="请输入代理密码（可选）"><p class="field-hint">密码仅在当前页面内保留，刷新页面后需重新填写。</p></div></div>
+              </div>
+              <div class="proxy-note"><span data-icon="info"></span><div><strong>连接状态：未检测</strong><p>当前只保存配置，不更改网络出口，也不会自动切换到其他线路。</p></div></div>
+            </section>
+          </div>
+        </div>
+        <aside class="config-preview"><div class="preview-title">环境预览 <span>未应用</span></div><div class="environment-symbol" data-icon="fingerprint"></div><strong id="previewName"></strong><span class="preview-id" id="previewId"></span><dl id="previewDetails"></dl><div class="preview-boundary"><span data-icon="info"></span><p>当前可操作：填写、保存和切换环境配置。<br>真实会话隔离、代理生效与高级指纹修改需桌面版接入。</p></div></aside>
+      </div>
+      <footer class="dialog-footer"><div><p id="formError" role="alert"></p><span class="save-note">配置仅保存在本浏览器，不会修改当前浏览器指纹。</span></div><div class="footer-actions"><button type="button" class="button quiet" id="cancelEnvironment">取消</button><button type="submit" class="button blue" id="saveEnvironment">创建环境并打开登录页 <span data-icon="arrow"></span></button></div></footer>
+    </form>
+  </dialog>
+  <dialog class="small-dialog translation-keys-dialog" id="translationKeysDialog" aria-labelledby="translationKeysTitle"><div class="small-dialog-head"><h2 id="translationKeysTitle">翻译 API Key 设置</h2><button class="icon-button" id="closeTranslationKeys" type="button" aria-label="关闭 API Key 设置" data-icon="close"></button></div><div id="translationKeysContent"></div></dialog>
+  <dialog class="small-dialog" id="infoDialog"><div class="small-dialog-head"><h2 id="infoTitle">使用说明</h2><button class="icon-button" id="closeInfo" aria-label="关闭说明" data-icon="close"></button></div><div id="infoContent"></div></dialog>
+  <div class="context-menu" id="contextMenu" hidden role="menu"></div>
+  <div class="group-popover" id="groupPopover" hidden role="dialog" aria-label="新增分组">
+    <form id="newGroupForm" novalidate>
+      <label class="group-popover-label" for="newGroupInput">分组名称</label>
+      <input id="newGroupInput" maxlength="30" placeholder="请输入分组名称" autocomplete="off" aria-describedby="newGroupError">
+      <p id="newGroupError" class="inline-error" role="alert"></p>
+      <div class="group-popover-actions"><button class="button quiet" id="cancelGroup" type="button">取消</button><button class="button blue" type="submit">保存</button></div>
+    </form>
+  </div>
+  <div class="remark-popover" id="remarkPopover" hidden role="dialog" aria-label="编辑本地备注"></div>
+  <dialog id="bulkDialog" class="bulk-dialog" aria-labelledby="bulkDialogTitle">
+    <header class="bulk-dialog-heading"><strong id="bulkDialogTitle">转发 / 群发</strong><button type="button" id="closeBulkDialog" class="icon-button" aria-label="关闭群发窗口" title="关闭窗口" data-icon="close"></button></header>
+    <div id="bulkFrameHost" class="bulk-frame-host"></div>
+  </dialog>
+  <div class="toast" id="toast" role="status"></div>
+</body>
+</html>

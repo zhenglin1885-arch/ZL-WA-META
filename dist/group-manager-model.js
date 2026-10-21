@@ -1,0 +1,3 @@
+export function sampleManagedGroups(accountId){return ['客户交流群','售后服务群','合作伙伴群'].map((name,i)=>({id:JSON.stringify([accountId,i]),accountId,name:name+' · 示例',closed:i===1,admin:true,result:''}))}
+export function filterManagedGroups(groups,accounts,filter='all',query=''){const q=query.trim().toLowerCase();return groups.filter(g=>accounts.has(g.accountId)&&(filter==='all'||(filter==='closed')===g.closed)&&(!q||g.name.toLowerCase().includes(q)))}
+export function changeSampleGroupMode(groups,selected,closed){let changed=0;for(const g of groups){if(!selected.has(g.id))continue;if(!g.admin){g.result='无管理员权限';continue}g.closed=closed;g.result=closed?'模拟完成：仅管理员发言':'模拟完成：所有成员可发言';changed++}return changed}

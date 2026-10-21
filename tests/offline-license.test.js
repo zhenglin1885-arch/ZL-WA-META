@@ -1,0 +1,6 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+import {TEST_ACTIVATION_CODE,OFFLINE_LICENSE_KEY,checkOfflineCode,activateOffline,readOfflineLicense} from '../dist/offline-license.js';
+const memory=()=>{const map=new Map();return {getItem:k=>map.get(k),setItem:(k,v)=>map.set(k,v)}};
+test('固定20位测试码匹配，错误码与旧8位码拒绝',()=>{assert.equal(TEST_ACTIVATION_CODE.length,20);assert.equal(checkOfflineCode(TEST_ACTIVATION_CODE),'');assert.ok(checkOfflineCode('AB12CD34'));assert.ok(checkOfflineCode('A'.repeat(20)))});
+test('本机记住激活日期，重新验证不重置日期',()=>{const s=memory();assert.equal(readOfflineLicense(s),null);const a=activateOffline(s,TEST_ACTIVATION_CODE);assert.deepEqual(readOfflineLicense(s),a);assert.deepEqual(activateOffline(s,TEST_ACTIVATION_CODE),a);assert.throws(()=>activateOffline(s,'WRONG'));assert.deepEqual(readOfflineLicense(s),a)});
+test('损坏或伪造标志不放行；存储失败不宣称激活成功',()=>{const s=memory();for(const value of ['broken',JSON.stringify({activated:true}),JSON.stringify({version:1,code:'A'.repeat(20),activatedAt:Date.now()})]){s.setItem(OFFLINE_LICENSE_KEY,value);assert.equal(readOfflineLicense(s),null)}assert.throws(()=>activateOffline({getItem:()=>null,setItem:()=>{throw Error('quota')}},TEST_ACTIVATION_CODE))});
