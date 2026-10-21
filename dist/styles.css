@@ -39,3 +39,24 @@ html.native-titlebar .titlebar .brand,html.native-titlebar .titlebar .network{fl
 
 .account-dot.green{background:#15c46a}.account-dot.yellow{background:#e9ba55}.account-dot.red{background:#df5555}.account-dot.gray{background:#80827f}
 .network-pending svg{animation:network-spin 1s linear infinite}@keyframes network-spin{to{transform:rotate(360deg)}}
+
+/* Native account lists and history table */
+#nativeTool [hidden]{display:none!important}
+#nativeTool .nt-accounts{display:flex;flex-direction:column;gap:8px;align-items:stretch}
+#nativeTool .nt-accounts>button{display:block;flex:none;width:100%;min-height:48px;margin:0;text-align:left;white-space:normal;overflow-wrap:anywhere;border:1px solid #383e39;border-radius:6px}
+#nativeTool .nt-accounts>button[aria-pressed="true"]{background:#172e4a;border-color:#2372f2;color:#fff}
+#nativeTool .nt-history{padding:20px;display:flex;flex-direction:column;gap:18px;min-height:0;flex:1;overflow:auto}
+.nt-history-tabs,.nt-history-toolbar,.nt-pagination{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.nt-history-tabs button[aria-pressed="true"]{color:#3984ff;border-color:#3984ff}
+.nt-history-toolbar input,.nt-history-toolbar select{width:auto;min-width:115px;max-width:200px}
+.nt-history-toolbar button:last-child{margin-left:auto;background:#075bed;color:white}
+.nt-table-scroll{overflow:auto;flex:1;min-height:120px;background:#151715}
+.nt-history-table{width:100%;border-collapse:collapse;font-size:12px;min-width:950px}
+.nt-history-table th,.nt-history-table td{padding:12px 10px;text-align:left;border-bottom:1px solid #323832;vertical-align:top}
+.nt-history-table th{background:#242824;position:sticky;top:0;white-space:nowrap}
+.nt-history-table td:first-child{max-width:220px;overflow-wrap:anywhere;white-space:pre-wrap}
+.nt-history-table td:last-child{min-width:160px}.nt-history-table button{font-size:12px;padding:5px;margin:2px}
+.nt-history-table progress{width:160px;height:9px;accent-color:#48af24}
+.nt-history-table details{display:inline-block;position:relative}.nt-history-table summary{cursor:pointer;color:#3984ff;padding:6px}
+.nt-pagination{justify-content:flex-end}.nt-pagination select{width:100px}
+.nt-task-detail{padding:16px;background:#202620;max-height:240px;overflow:auto;border:1px solid #3b453b}

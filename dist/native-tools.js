@@ -1,8 +1,6 @@
+import {readHistory as history,writeTask as save,renderHistory} from './native-history.js';
 const el=(tag,cls,text)=>{const e=document.createElement(tag);e.className=cls||'';if(text!==undefined)e.textContent=text;return e};
 const button=(text,fn)=>{const b=el('button','button quiet',text);b.type='button';b.onclick=fn;return b};
-const STORE='zl-real-forward-history-v1';
-function history(){try{return JSON.parse(localStorage.getItem(STORE)||'[]')}catch{return []}}
-function save(task){const all=history().filter(t=>t.id!==task.id);all.unshift(task);localStorage.setItem(STORE,JSON.stringify(all.slice(0,100)))}
 export function openNativeTool(tool,state,status){
  if(document.getElementById('nativeTool'))return;
  const api=window.zlDesktop,groups=tool==='groups',d=el('dialog','bulk-dialog group-manager');d.id='nativeTool';
@@ -30,13 +28,15 @@ export function openNativeTool(tool,state,status){
    try{if(!file.hidden){const f=file.files[0];if(!f||f.size>25*1024*1024)throw Error('请选择不超过 25 MB 的文件');content.data=await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=reject;r.readAsDataURL(f)});content.filename=f.name;content.mime=f.type||'application/octet-stream';if(!f.type)content.data=content.data.replace(/^data:[^;]*;/,'data:application/octet-stream;')}
     await api.validateMessage({accountId:id,action:'send',chatId:targets[0].id,content});
    }catch(e){feedback(e.message);return}
-   busy=true;cancelled=false;send.disabled=true;[type,text,file,name,phone].forEach(e=>e.disabled=true);accounts();draw();const task={id:crypto.randomUUID(),createdAt:Date.now(),accountId:id,type:content.type,state:'running',results:targets.map(r=>({id:r.id,name:r.name,state:'pending'}))};
-   try{save(task)}catch{busy=false;feedback('无法保存任务记录，未发送消息');return}
+   busy=true;cancelled=false;send.disabled=true;[type,text,file,name,phone].forEach(e=>e.disabled=true);accounts();draw();const task={content:{...content,data:undefined},id:crypto.randomUUID(),createdAt:Date.now(),accountId:id,type:content.type,state:'running',results:targets.map(r=>({id:r.id,name:r.name,state:'pending'}))};
+   try{save(task)}catch{busy=false;send.disabled=false;[type,text,file,name,phone].forEach(e=>e.disabled=false);accounts();draw();feedback('无法保存任务记录，未发送消息');return}
    for(const r of task.results){if(cancelled){r.state='cancelled';continue}r.state='submitting';save(task);try{const result=await run({action:'send',chatId:r.id,content});r.state='submitted';r.messageId=result.id;r.ack=result.ack}catch(e){r.state='failed';r.error=e.message}save(task);feedback('已处理 '+task.results.filter(r=>!['pending','submitting'].includes(r.state)).length+' / '+targets.length)}
-   task.state='finished';save(task);busy=false;send.disabled=false;[type,text,file,name,phone].forEach(e=>e.disabled=false);accounts();draw();feedback('已提交 '+task.results.filter(r=>r.state==='submitted').length+'；失败 '+task.results.filter(r=>r.state==='failed').length+'。可查看历史记录。');api.taskComplete({submitted:task.results.filter(r=>r.state==='submitted').length,failed:task.results.filter(r=>r.state==='failed').length});
+   task.state='finished';task.finishedAt=Date.now();save(task);busy=false;send.disabled=false;[type,text,file,name,phone].forEach(e=>e.disabled=false);accounts();draw();feedback('已提交 '+task.results.filter(r=>r.state==='submitted').length+'；失败 '+task.results.filter(r=>r.state==='failed').length+'。可查看历史记录。');api.taskComplete({submitted:task.results.filter(r=>r.state==='submitted').length,failed:task.results.filter(r=>r.state==='failed').length});
   });
   q('.nt-compose').append(type,text,file,name,phone,send,button('停止后续发送',()=>{cancelled=true}));
-  function showHistory(){if(busy)return;const h=q('.nt-history');h.hidden=false;q('.gm-columns').hidden=true;h.replaceChildren();for(const t of history()){const card=el('section','gm-detail');card.append(el('strong','',new Date(t.createdAt).toLocaleString()+' · '+t.type));for(const r of t.results)card.append(el('p','',r.name+'：'+({submitted:'已提交，送达情况以 WhatsApp 回执为准',failed:'失败：'+r.error,cancelled:'已取消',pending:'未提交',submitting:'结果未确认，请核对后再发送'}[r.state]||r.state)));h.append(card)}if(!h.children.length)h.append(el('p','','暂无转发记录'))}
+  function newTask(){q('.nt-history').hidden=true;q('.gm-columns').hidden=false}
+  async function repeat(t){newTask();id=t.accountId;accounts();await load();selected=new Set((t.results||[]).map(r=>r.id).filter(v=>rows.some(r=>r.id===v)));type.value=t.type;const c=t.content||{};text.value=c.text||'';name.value=c.name||'';phone.value=c.phone||'';file.value='';fields();draw();feedback(!t.content?'旧记录未保存内容，请重新填写':!file.hidden?'已恢复对象与内容，请重新选择附件，检查后点击发送':'已恢复对象与内容，检查后点击发送')}
+  function showHistory(){if(busy)return;const h=q('.nt-history');h.hidden=false;q('.gm-columns').hidden=true;renderHistory(h,{newTask,repeat,api})}
   q('.nt-header').prepend(button('新建转发',()=>{q('.nt-history').hidden=true;q('.gm-columns').hidden=false}),button('历史记录',showHistory));if(history().length)showHistory();
  }
  d.onclose=()=>{epoch++;d.remove()};document.body.append(d);d.showModal();accounts();load();

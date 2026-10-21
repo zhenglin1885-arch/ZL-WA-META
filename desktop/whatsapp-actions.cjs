@@ -14,6 +14,14 @@ async function pageAction(request){
   if(!request.chatId.endsWith('@g.us')||!await w.group.iAmAdmin(request.chatId))throw Error('当前账号不是该群管理员。');
   const ok=await w.group.setProperty(request.chatId,'announcement',request.closed);if(ok===false)throw Error('WhatsApp 未接受群组设置。');return {closed:request.closed};
  }
+ if(request.action==='revoke'){
+  const message=await w.chat.getMessageById(request.messageId);
+  if(!message?.id?.fromMe||String(message.id.remote)!==request.chatId)throw Error('只能撤回当前聊天中由自己发送的消息。');
+  const result=await w.chat.deleteMessage(request.chatId,request.messageId,false,true);
+  const item=Array.isArray(result)?result[0]:result;
+  if(!item?.isRevoked)throw Error('WhatsApp 未确认撤回，可能已超过期限或权限不足。');
+  return {revoked:true};
+ }
  if(request.action==='send'){
   const c=request.content;let result;
   if(c.type==='text')result=await w.chat.sendTextMessage(request.chatId,c.text,{waitForAck:true});
@@ -24,10 +32,11 @@ async function pageAction(request){
  throw Error('不支持的操作');
 }
 function validateAction(request){
- if(!request||!['list','group-mode','send'].includes(request.action))throw Error('操作无效');
+ if(!request||!['list','group-mode','send','revoke'].includes(request.action))throw Error('操作无效');
  if(typeof request.accountId!=='string'||!request.accountId||request.accountId.length>150)throw Error('账号无效');
  if(request.action==='list')return;
  if(typeof request.chatId!=='string'||!/^[-\d]+@(?:c\.us|lid|g\.us)$/.test(request.chatId))throw Error('聊天无效');
+ if(request.action==='revoke'){if(typeof request.messageId!=='string'||request.messageId.length>300||!request.messageId.startsWith('true_'+request.chatId+'_'))throw Error('撤回消息 ID 无效');return}
  if(request.action==='group-mode'){if(typeof request.closed!=='boolean')throw Error('群组设置无效');return}
  const c=request.content;if(!c||!['text','image','caption','video','file','contact'].includes(c.type))throw Error('消息类型无效');
  if(['text','caption'].includes(c.type)&&(typeof c.text!=='string'||!c.text.trim()||c.text.length>60000))throw Error('请填写有效文本，最多 60000 字符');

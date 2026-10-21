@@ -10,10 +10,11 @@ function createTranslationService({directory,safeStorage,fetch}){
  const defaults={provider:'google',sendEnabled:false,receiveEnabled:false,sendLanguage:'en',receiveLanguage:'zh-CN',model:''};
  const get=id=>({...defaults,...stored.accounts[id]});
  function publicConfig(id){return {...get(id),hasKey:!!stored.keys[get(id).provider]}}
- function save(id,value,apiKey){if(typeof id!=='string'||!id||id.length>150)throw Error('账号无效');const config=cleanConfig(value),next=JSON.parse(JSON.stringify(stored));if(['openai','gemini'].includes(config.provider)&&!config.model.trim())throw Error('请填写该服务可用的模型名称');if(apiKey){if(typeof apiKey!=='string'||apiKey.length>4000)throw Error('API Key 无效');if(!safeStorage.isEncryptionAvailable())throw Error('系统密钥加密不可用，未保存');next.keys[config.provider]=safeStorage.encryptString(apiKey).toString('base64')}if((config.sendEnabled||config.receiveEnabled)&&!next.keys[config.provider])throw Error('此翻译服务尚未配置 API Key');next.accounts[id]=config;fs.writeFileSync(file+'.tmp',JSON.stringify(next));fs.renameSync(file+'.tmp',file);stored=next;return publicConfig(id)}
+ function save(id,value,apiKey){if(typeof id!=='string'||!id||id.length>150)throw Error('账号无效');const config=cleanConfig(value),next=JSON.parse(JSON.stringify(stored));if(['openai','gemini'].includes(config.provider)&&!config.model.trim())throw Error('请填写该服务可用的模型名称');if(apiKey){if(typeof apiKey!=='string'||apiKey.length>4000)throw Error('API Key 无效');if(!safeStorage.isEncryptionAvailable())throw Error('系统密钥加密不可用，未保存');next.keys[config.provider]=safeStorage.encryptString(apiKey).toString('base64')}if(config.provider!=='google'&&(config.sendEnabled||config.receiveEnabled)&&!next.keys[config.provider])throw Error('此翻译服务尚未配置 API Key');next.accounts[id]=config;fs.writeFileSync(file+'.tmp',JSON.stringify(next));fs.renameSync(file+'.tmp',file);stored=next;return publicConfig(id)}
  async function translate(id,direction,text){
   const config=get(id);if(typeof text!=='string'||!text.trim()||text.length>10000)throw Error('翻译文本为空或超过 10000 字符');
-  if(!stored.keys[config.provider])throw Error('请先配置翻译服务 API Key');
+  if(config.provider==='google')return googleFreeTranslate(fetch,text,direction==='receive'?config.receiveLanguage:config.sendLanguage);
+  if(!stored.keys[config.provider])throw Error(config.provider==='deepl'?'DeepL 免费 API 仍需免费 Key，请在 DeepL 开发者页面申请':'请先配置翻译服务 API Key');
   let key;try{key=safeStorage.decryptString(Buffer.from(stored.keys[config.provider],'base64'))}catch{throw Error('无法读取 API Key，请重新保存')}
   const target=direction==='receive'?config.receiveLanguage:config.sendLanguage;let url,body,headers={'Content-Type':'application/json'};
   if(config.provider==='google'){url='https://translation.googleapis.com/language/translate/v2';headers['X-Goog-Api-Key']=key;body={q:text,target,format:'text'}}
@@ -27,4 +28,13 @@ function createTranslationService({directory,safeStorage,fetch}){
  }
  return {get,publicConfig,save,translate};
 }
-module.exports={createTranslationService,cleanConfig};
+async function googleFreeTranslate(fetch,text,target){
+ if(text.length>5000)throw Error('Google 免费通道单次最多 5000 字符');
+ const url=new URL('https://translate.googleapis.com/translate_a/single');
+ for(const [k,v] of Object.entries({client:'gtx',sl:'auto',tl:target,dt:'t',q:text}))url.searchParams.set(k,v);
+ let r;try{r=await fetch(url.toString(),{signal:AbortSignal.timeout(10000)})}catch{throw Error('Google 免费通道连接失败或超时，请重试')}
+ if(!r.ok)throw Error(r.status===429?'Google 免费通道限流，请稍后重试':'Google 免费通道返回 HTTP '+r.status);
+ const data=await r.json();const translated=Array.isArray(data?.[0])?data[0].map(part=>typeof part?.[0]==='string'?part[0]:'').join(''):'';
+ if(!translated.trim())throw Error('Google 免费通道未返回有效译文');return translated;
+}
+module.exports={createTranslationService,cleanConfig,googleFreeTranslate};
