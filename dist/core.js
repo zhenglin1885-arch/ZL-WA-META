@@ -16,6 +16,13 @@ export function accountCardView(profile,{sample=false,sampleUnreadCount,platform
  const unreadCount=safeUnreadCount(sampleUnreadCount===undefined?profile.unreadCount:sampleUnreadCount);
  return {nickname:account?text(account.nickname)||(platform==='facebook'?'Facebook Business 账号':'WhatsApp 账号'):'未登录账号',phoneNumber:account?text(account.phoneNumber)||'—':'—',avatarUrl,remark:typeof profile.remark==='string'?profile.remark:'',authenticated,isSample:sample,status:profile.sleeping?'sleep':sample?'sample':authenticated?'online':'offline',unreadCount,unreadLabel:unreadCount>99?'99+':unreadCount?String(unreadCount):'',isUnreadSample:sampleUnreadCount!==undefined};
 }
+export function parseSmartProxy(text,defaultType='http'){
+ const raw=String(text).trim();if(raw.includes('://'))return parseProxy(raw);
+ const labelled={};for(const line of raw.split(/[\n,，;；]+/)){const m=line.trim().match(/^(ip|host|主机|地址|端口|port|账号|账户|用户名|user(?:name)?|密码|pass(?:word)?)\s*[:：=]\s*(.+)$/i);if(m)labelled[m[1].toLowerCase()]=m[2].trim()}
+ let host=labelled.ip||labelled.host||labelled['主机']||labelled['地址'],port=labelled.port||labelled['端口'],user=labelled.user||labelled.username||labelled['账号']||labelled['账户']||labelled['用户名']||'',password=labelled.password||labelled.pass||labelled['密码']||'';
+ if(!host||!port){const m=raw.match(/^(\[[^\]]+\]|[^:\s,;]+):(\d+)(?::([^:]*):(.*))?$/s);if(m){[,host,port,user='',password='']=m}else{const parts=raw.split(/[\s,，;；]+/);if(parts.length!==2&&parts.length!==4)throw Error('请输入 IP:端口:账号:密码，或用空格/换行分隔四项；也支持完整代理链接。');[host,port,user='',password='']=parts}}
+ const type=['http','https','socks5'].includes(defaultType)?defaultType:'http';return parseProxy(type+'://'+(user||password?encodeURIComponent(user)+':'+encodeURIComponent(password)+'@':'')+host+':'+port);
+}
 export function parseProxy(text){
  let url;try{url=new URL(text.trim())}catch{throw new Error('代理链接格式不正确，请使用 scheme://user:pass@host:port。')}
  const type=url.protocol.slice(0,-1);

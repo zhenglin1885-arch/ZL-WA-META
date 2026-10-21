@@ -15,7 +15,7 @@
     "electron-builder": "26.15.3"
   },
   "build": {
-    "appId": "com.zl.multimanager.test",
+    "appId": "ZL.MultiManager",
     "productName": "ZL Multi Manager",
     "directories": {
       "output": "release"
@@ -31,11 +31,13 @@
       "network-status.cjs",
       "whatsapp-actions.cjs",
       "translation-service.cjs",
-      "translation-runtime.cjs"
+      "translation-runtime.cjs",
+      "proxy-service.cjs"
     ],
     "win": {
       "target": "nsis",
-      "signAndEditExecutable": false
+      "signAndEditExecutable": false,
+      "icon": "icon.ico"
     },
     "nsis": {
       "artifactName": "ZL-Multi-Manager-Setup.exe",
@@ -43,7 +45,17 @@
       "perMachine": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
-      "deleteAppDataOnUninstall": false
-    }
+      "deleteAppDataOnUninstall": false,
+      "include": "notifications.nsh"
+    },
+    "extraFiles": [
+      {
+        "from": "icon.ico",
+        "to": "icon.ico"
+      }
+    ]
+  },
+  "dependencies": {
+    "proxy-chain": "3.0.1"
   }
 }

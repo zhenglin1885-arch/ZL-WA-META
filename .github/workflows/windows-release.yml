@@ -15,8 +15,8 @@ jobs:
           node-version: '24'
           cache: npm
           cache-dependency-path: desktop/package-lock.json
-      - run: npm test
       - run: npm ci --prefix desktop
+      - run: npm test
       - run: npm run dist:win --prefix desktop
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'

@@ -8,16 +8,16 @@ function clampBounds(rect,size){if(!rect||!['x','y','width','height'].every(k=>N
 function browserUserAgent(value){return String(value).replace(/\s(?:Electron|zl-multi-manager)\/[^\s]+/gi,'')}
 function fitZoom(bounds){return Math.max(0.7,Math.min(1,bounds.width/1100,bounds.height/780))}
 class AccountSessions{
- constructor({win,WebContentsView,session,notify,startMetadataMonitor,startTranslationMonitor}){Object.assign(this,{win,WebContentsView,session,notify,startMetadataMonitor,startTranslationMonitor});this.items=new Map();this.metadata=new Map();this.layout=null;this.attached=null}
+ constructor({win,WebContentsView,session,notify,startMetadataMonitor,startTranslationMonitor,configureProxy}){Object.assign(this,{win,WebContentsView,session,notify,startMetadataMonitor,startTranslationMonitor,configureProxy});this.items=new Map();this.metadata=new Map();this.layout=null;this.attached=null}
  emit(item,state,message=''){item.state=state;item.message=message;this.notify({key:item.key,platform:item.platform,id:item.id,state,message,metadata:item.metadata,metadataSync:item.metadataSync});this.paint()}
  sync(accounts){
   if(!Array.isArray(accounts))throw Error('Invalid accounts');
   const seen=new Set();for(const a of accounts){const key=keyOf(a.platform,a.id);if(seen.has(key))throw Error('Duplicate account');seen.add(key)}
   for(const [key,item] of this.items)if(!seen.has(key)){this.destroy(item);this.metadata.delete(key)}
-  for(const a of accounts){const key=keyOf(a.platform,a.id),blocked=!!a.proxyEnabled;let item=this.items.get(key);
-   if(item&&(!!item.sleeping!==!!a.sleeping||item.blocked!==blocked)){this.destroy(item);item=null}
+  for(const a of accounts){const key=keyOf(a.platform,a.id),blocked=!!a.proxyEnabled&&!this.configureProxy;let item=this.items.get(key);
+   if(item&&(!!item.sleeping!==!!a.sleeping||item.blocked!==blocked||item.proxyRevision!==a.proxyRevision)){this.destroy(item);item=null}
    if(item)continue;
-   item={key,id:a.id,platform:a.platform,sleeping:!!a.sleeping,blocked,metadata:this.metadata.get(key),popups:new Set()};this.items.set(key,item);
+   item={key,id:a.id,platform:a.platform,sleeping:!!a.sleeping,blocked,proxyRevision:a.proxyRevision,metadata:this.metadata.get(key),popups:new Set()};this.items.set(key,item);
    if(a.sleeping){this.emit(item,'sleeping','当前会话已休眠，登录数据保留。');continue}
    if(blocked){this.emit(item,'blocked','该账号启用了尚未接入的代理。为避免改用直连，已停止加载；请关闭此账号的代理设置后重试。');continue}
    const ses=this.session.fromPartition(partitionFor(a.platform,a.id));
@@ -42,7 +42,9 @@ class AccountSessions{
     item.metadata=next;this.metadata.set(key,next);this.emit(item,item.state,item.message);
    },()=>{if(this.items.get(key)===item&&item.metadataSync!=='unavailable'){item.metadataSync='unavailable';this.emit(item,item.state,item.message)}});
    if(a.platform==='whatsapp'&&this.startTranslationMonitor)item.stopTranslation=this.startTranslationMonitor(wc,a.id);
-   this.emit(item,'loading','正在加载官方页面…');wc.loadURL(URLS[a.platform]).catch(()=>{});
+   this.emit(item,'loading','正在加载官方页面…');
+   if(this.configureProxy){Promise.resolve().then(()=>this.configureProxy(ses,a,item)).then(()=>{if(this.items.get(key)!==item){item.closeProxy?.();return}wc.loadURL(URLS[a.platform]).catch(()=>{})}).catch(()=>{if(this.items.get(key)===item)this.emit(item,'blocked','代理应用失败，请重新检测并保存代理；未切换直连。')})}
+   else wc.loadURL(URLS[a.platform]).catch(()=>{});
   }
   return [...this.items.values()].map(({key,id,platform,state,message,metadata})=>({key,id,platform,state,message,metadata}));
  }
@@ -60,7 +62,7 @@ class AccountSessions{
   if(view){view.setBounds(bounds);const zoom=fitZoom(bounds);if(item.zoom!==zoom){view.webContents.setZoomFactor(zoom);item.zoom=zoom}if(this.attached!==view){this.win.contentView.addChildView(view);this.attached=view}}
  }
  reload(platform,id){const item=this.items.get(keyOf(platform,id));if(!item?.view)throw Error(item?.message||'会话尚未运行');item.view.webContents.reload()}
- destroy(item){item.stopMetadata?.();item.stopTranslation?.();if(this.attached===item.view){this.win.contentView.removeChildView(item.view);this.attached=null}this.items.delete(item.key);for(const p of item.popups)p.destroy();if(item.view&&!item.view.webContents.isDestroyed())item.view.webContents.close({waitForBeforeUnload:false})}
+ destroy(item){item.destroyed=true;item.closeProxy?.()?.catch(()=>{});item.stopMetadata?.();item.stopTranslation?.();if(this.attached===item.view){this.win.contentView.removeChildView(item.view);this.attached=null}this.items.delete(item.key);for(const p of item.popups)p.destroy();if(item.view&&!item.view.webContents.isDestroyed())item.view.webContents.close({waitForBeforeUnload:false})}
  dispose(){for(const item of [...this.items.values()])this.destroy(item)}
 }
 module.exports={AccountSessions,keyOf,partitionFor,allowedURL,clampBounds,browserUserAgent,fitZoom};

@@ -317,9 +317,10 @@ function showTool(tool){
  activeTool=tool;$('toolDrawer').hidden=false;document.querySelectorAll('[data-tool]').forEach(b=>{const selected=b.dataset.tool===tool;b.classList.toggle('active',selected);b.setAttribute('aria-pressed',String(selected));b.setAttribute('aria-expanded',String(selected))});$('drawerTitle').textContent=({proxy:'代理设置',translate:'翻译配置',forward:'转发 / 群发'})[tool];const body=$('drawerBody'),p=current();body.replaceChildren();body.classList.toggle('proxy-drawer-body',tool==='proxy'&&Boolean(p));$('toolDrawer').classList.toggle('proxy-drawer',tool==='proxy'&&Boolean(p));body.classList.toggle('translation-drawer-body',tool==='translate'&&Boolean(p));$('toolDrawer').classList.toggle('translation-drawer',tool==='translate'&&Boolean(p));
  if(!p){body.append(node('p','','先建立一个环境，再为该环境配置工具。'),action('新增会话',()=>openEnvironment(),'button blue','plus'));return}
  if(tool==='proxy'){
-  proxyPanel=createProxyPanel(p,{credentials:proxyCredentialsByProfile.get(p.id),icon,onCancel:()=>{closeDrawer();document.querySelector('[data-tool="proxy"]').focus()},onSave:(profileId,settings,credentials)=>{
+  proxyPanel=createProxyPanel(p,{platform:activePlatform,credentials:proxyCredentialsByProfile.get(p.id),icon,onCancel:()=>{closeDrawer();document.querySelector('[data-tool="proxy"]').focus()},onSave:async(profileId,settings,credentials)=>{
+   if(window.zlDesktop?.proxySave)await window.zlDesktop.proxySave({platform:activePlatform,id:profileId,config:{...settings,proxyPassword:credentials.password}});
    const next=structuredClone(state);applyProxySettings(next,profileId,settings);if(!persist(next))return false;
-   proxyCredentialsByProfile.set(profileId,credentials);closeDrawer();toast('此账号的代理配置已保存，但尚未生效。');return true
+   proxyCredentialsByProfile.set(profileId,credentials);closeDrawer();toast(nativeWorkspace?'代理已保存，正在重新加载此账号。':'代理配置已保存，请在桌面应用中使用。');return true
   }});body.append(proxyPanel.element);return
  }
  if(tool==='translate'){

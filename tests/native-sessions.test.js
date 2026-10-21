@@ -50,3 +50,5 @@ test('metadata stays account-scoped and stale callbacks cannot update a sleeping
  f.manager.sync([account('a'),account('b')]);callbacks[0]({authenticated:true,unreadCount:99});assert.equal(f.manager.items.get('whatsapp:a').metadata.unreadCount,5);
  callbacks[2]({authenticated:false,nickname:'',unreadCount:0,avatarUrl:'',phoneNumber:''});assert.equal(f.manager.items.get('whatsapp:a').metadata.unreadCount,0);f.manager.dispose();assert.equal(stops.length,3);
 });
+
+test('proxy configuration completes before login URL loads; failed apply never loads it',async()=>{const f=fixture();let release;f.manager.configureProxy=()=>new Promise(r=>release=r);f.manager.sync([{...account('a'),proxyEnabled:true}]);await Promise.resolve();assert.equal(f.views[0].webContents.urls.length,0);release();await new Promise(r=>setImmediate(r));assert.equal(f.views[0].webContents.urls.length,1);f.manager.configureProxy=async()=>{throw Error('proxy rejected')};f.manager.sync([{...account('a'),proxyEnabled:true,proxyRevision:'new'}]);await new Promise(r=>setImmediate(r));assert.equal(f.views[1].webContents.urls.length,0);assert.equal(f.statuses.at(-1).state,'blocked');f.manager.dispose()});

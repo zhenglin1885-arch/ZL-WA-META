@@ -3,9 +3,11 @@ const {startMetadataMonitor}=require('./whatsapp-metadata.cjs');
 const {app,BrowserWindow,protocol,net,ipcMain,Tray,Menu,WebContentsView,session,Notification,shell,clipboard,safeStorage}=require('electron');
 const {createTranslationService}=require('./translation-service.cjs');
 const {startTranslationMonitor}=require('./translation-runtime.cjs');
+const {createProxyService}=require('./proxy-service.cjs');
 const {measureNetwork}=require('./network-status.cjs');
 const {runAction,validateAction}=require('./whatsapp-actions.cjs');
 const path=require('node:path'),fs=require('node:fs'),{pathToFileURL}=require('node:url');
+const originalUserData=app.getPath('userData');app.setName('ZL Multi Manager');app.setPath('userData',originalUserData);
 protocol.registerSchemesAsPrivileged([{scheme:'zl',privileges:{standard:true,secure:true,supportFetchAPI:true}}]);
 let win,tray,quitting=false,prefs={closeBehavior:'tray',autoStart:false};
 if(!app.requestSingleInstanceLock())app.quit();
@@ -14,8 +16,8 @@ else {
  app.on('before-quit',()=>quitting=true);
  app.whenReady().then(()=>{
   if(process.argv.includes('--quit-for-maintenance')){app.quit();return}
-  app.setAppUserModelId('com.zl.multimanager.test');
-  if(process.platform==='win32'){try{const shortcut=path.join(app.getPath('appData'),'Microsoft/Windows/Start Menu/Programs/ZL Multi Manager/ZL Multi Manager.lnk');shell.writeShortcutLink(shortcut,'update',{target:process.execPath,appUserModelId:'com.zl.multimanager.test'})}catch{}}
+  app.setAppUserModelId('ZL.MultiManager');
+  if(process.platform==='win32'){try{const shortcut=path.join(app.getPath('appData'),'Microsoft/Windows/Start Menu/Programs/ZL Multi Manager/ZL Multi Manager.lnk');shell.writeShortcutLink(shortcut,'update',{target:process.execPath,description:'ZL Multi Manager',icon:path.join(path.dirname(process.execPath),'icon.ico'),iconIndex:0,appUserModelId:'ZL.MultiManager'})}catch{}}
   let lastNetwork=null;ipcMain.handle('network-status',async e=>{trusted(e);try{lastNetwork=await measureNetwork((url,options)=>net.fetch(url,options));return lastNetwork}catch{lastNetwork=null;throw Error('公网 IP 检测失败，请检查网络')}});
   ipcMain.handle('copy-network-ip',e=>{trusted(e);if(lastNetwork)clipboard.writeText(lastNetwork.ip)});
   const notificationStates=new Map();
@@ -48,12 +50,17 @@ else {
   function recordSessionStatus(status){
    sessionDiagnostics.push({time:new Date().toISOString(),account:partitionFor(status.platform,status.id),state:status.state,message:status.message,metadataSync:status.metadataSync,avatarStatus:status.metadata?.avatarStatus,avatarSource:status.metadata?.avatarSource});
    if(sessionDiagnostics.length>200)sessionDiagnostics.shift();
-   try{fs.writeFileSync(path.join(app.getPath('userData'),'session-diagnostics.json'),JSON.stringify({build:'0.2.0-R6',electron:process.versions.electron,chrome:process.versions.chrome,events:sessionDiagnostics},null,2))}catch{}
+   try{fs.writeFileSync(path.join(app.getPath('userData'),'session-diagnostics.json'),JSON.stringify({build:'0.2.0-R8',electron:process.versions.electron,chrome:process.versions.chrome,events:sessionDiagnostics},null,2))}catch{}
   }
-  const accounts=new AccountSessions({win,WebContentsView,session,startMetadataMonitor,startTranslationMonitor:(wc,id)=>startTranslationMonitor(wc,id,translationService),notify:status=>{recordSessionStatus(status);notifyAccount(status);if(!win.isDestroyed())win.webContents.send('account-status',status)}});
+  const proxyService=createProxyService({directory:app.getPath('userData'),safeStorage,session});let lastAccounts=[];
+  const accounts=new AccountSessions({configureProxy:proxyService.configure,win,WebContentsView,session,startMetadataMonitor,startTranslationMonitor:(wc,id)=>startTranslationMonitor(wc,id,translationService),notify:status=>{recordSessionStatus(status);notifyAccount(status);if(!win.isDestroyed())win.webContents.send('account-status',status)}});
   for(const event of ['resize','move','maximize','unmaximize','restore'])win.on(event,()=>{accounts.paint();win.webContents.send('layout-request')});
   app.on('before-quit',()=>accounts.dispose());
-  ipcMain.handle('accounts-sync',(e,items)=>{trusted(e);return accounts.sync(items)});
+  ipcMain.handle('accounts-sync',(e,items)=>{trusted(e);lastAccounts=items;return accounts.sync(items.map(a=>({...a,proxyRevision:proxyService.revision(a.platform+':'+a.id)})))});
+  const proxyKey=v=>{partitionFor(v.platform,v.id);return v.platform+':'+v.id};
+  ipcMain.handle('proxy-get',(e,v)=>{trusted(e);return proxyService.get(proxyKey(v))});
+  ipcMain.handle('proxy-test',(e,v)=>{trusted(e);return proxyService.test(v)});
+  ipcMain.handle('proxy-save',(e,v)=>{trusted(e);proxyService.save(proxyKey(v),v.config);lastAccounts=lastAccounts.map(a=>a.id===v.id&&a.platform===v.platform?{...a,proxyEnabled:v.config.proxyEnabled}:a);accounts.sync(lastAccounts.map(a=>({...a,proxyRevision:proxyService.revision(a.platform+':'+a.id)})));return true});
   ipcMain.handle('accounts-layout',(e,layout)=>{trusted(e);accounts.setLayout(layout)});
   ipcMain.handle('whatsapp-action',(e,request)=>{trusted(e);return runAction(accounts,request)});
   ipcMain.handle('validate-message',(e,request)=>{trusted(e);validateAction(request);return true});

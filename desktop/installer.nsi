@@ -49,6 +49,10 @@ Section "Install"
   SetShellVarContext current
   SetOutPath "$INSTDIR"
   File /r /x ".*" "release/win-unpacked/*.*"
+  File "icon.ico"
+  WriteRegStr HKCU "Software\Classes\AppUserModelId\ZL.MultiManager" "DisplayName" "ZL Multi Manager"
+  WriteRegStr HKCU "Software\Classes\AppUserModelId\ZL.MultiManager" "IconUri" "$INSTDIR\icon.ico"
+  WriteRegDWORD HKCU "Software\Classes\AppUserModelId\ZL.MultiManager" "ShowInSettings" 1
   WriteUninstaller "$INSTDIR\Uninstall.exe"
   CreateShortcut "$DESKTOP\ZL Multi Manager.lnk" "$INSTDIR\ZL Multi Manager.exe"
   CreateDirectory "$SMPROGRAMS\ZL Multi Manager"
@@ -56,12 +60,14 @@ Section "Install"
   CreateShortcut "$SMPROGRAMS\ZL Multi Manager\Uninstall.lnk" "$INSTDIR\Uninstall.exe"
   WriteRegStr HKCU "Software\ZL Multi Manager" "InstallDir" "$INSTDIR"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\ZLMultiManager" "DisplayName" "ZL Multi Manager"
-  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\ZLMultiManager" "DisplayVersion" "0.2.0-R7"
+  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\ZLMultiManager" "DisplayVersion" "0.2.0-R8"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\ZLMultiManager" "UninstallString" '$\"$INSTDIR\Uninstall.exe$\"'
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\ZLMultiManager" "DisplayIcon" "$INSTDIR\ZL Multi Manager.exe"
 SectionEnd
 Section "Uninstall"
   Call un.CloseZL
+  DeleteRegKey HKCU "Software\Classes\AppUserModelId\ZL.MultiManager"
+  Delete "$INSTDIR\icon.ico"
   SetShellVarContext current
   Delete "$DESKTOP\ZL Multi Manager.lnk"
   Delete "$SMPROGRAMS\ZL Multi Manager\ZL Multi Manager.lnk"

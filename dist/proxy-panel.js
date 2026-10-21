@@ -1,6 +1,6 @@
-import {parseProxy,proxySettings,validateProxyConfig} from './core.js';
+import {parseSmartProxy,proxySettings,validateProxyConfig} from './core.js';
 
-export function createProxyPanel(profile,{credentials={},onSave,onCancel,icon}){
+export function createProxyPanel(profile,{credentials={},platform='whatsapp',onSave,onCancel,icon}){
  const form=document.createElement('form');form.className='proxy-panel';form.noValidate=true;
  form.innerHTML=`
   <div class="proxy-panel-scroll">
@@ -12,7 +12,7 @@ export function createProxyPanel(profile,{credentials={},onSave,onCancel,icon}){
     <div class="proxy-field"><label for="accountProxyUsername">代理账号</label><input id="accountProxyUsername" name="proxyUsername" placeholder="请输入代理账号（可选）" autocomplete="off"></div>
     <div class="proxy-field"><label for="accountProxyPassword">代理密码</label><div class="proxy-password-input"><input id="accountProxyPassword" name="proxyPassword" type="password" placeholder="请输入代理密码（可选）" autocomplete="new-password"><button class="icon-button proxy-password-toggle" type="button" aria-label="显示代理密码" aria-pressed="false" title="显示密码"></button></div></div>
     <div class="proxy-field"><div class="proxy-field-heading"><label for="accountProxyRefreshUrl">刷新 URL</label><button class="icon-button proxy-refresh-url" type="button" title="刷新代理 IP（桌面版）" aria-label="刷新代理 IP"></button></div><input id="accountProxyRefreshUrl" name="proxyRefreshUrl" type="url" placeholder="请输入刷新 URL（可选）" autocomplete="off"></div>
-    <details class="proxy-import-details"><summary>代理链接导入</summary><div class="proxy-import-row"><input name="proxyImport" type="password" placeholder="scheme://user:pass@host:port" aria-label="代理链接" autocomplete="off"><button class="button quiet proxy-import-button" type="button">导入</button></div></details>
+    <details class="proxy-import-details"><summary>智能输入</summary><div class="proxy-import-row"><textarea name="proxyImport" rows="3" placeholder="IP:端口:账号:密码，或空格/换行分隔；也支持代理链接" aria-label="智能输入代理信息"></textarea><button class="button quiet proxy-import-button" type="button">识别并填写</button></div></details>
    </div>
    <div class="proxy-network-status" role="status" aria-live="polite"><strong></strong><p></p></div>
   </div>
@@ -29,7 +29,7 @@ export function createProxyPanel(profile,{credentials={},onSave,onCancel,icon}){
  function readDraft(){
   return {...Object.fromEntries(['proxyType','proxyHost','proxyPort','proxyUsername','proxyPassword','proxyRefreshUrl'].map(key=>[key,field(key).value])),proxyEnabled:field('proxyEnabled').checked};
  }
- const baseline=JSON.stringify(readDraft());
+ let baseline=JSON.stringify(readDraft());
  function showStatus(tone,title,message){
   const status=query('.proxy-network-status');status.className='proxy-network-status '+tone;status.querySelector('strong').textContent=title;status.querySelector('p').textContent=message;
  }
@@ -56,22 +56,32 @@ export function createProxyPanel(profile,{credentials={},onSave,onCancel,icon}){
  };
  query('.proxy-import-button').onclick=()=>{
   try{
-   const parsed=parseProxy(field('proxyImport').value);for(const key of ['proxyType','proxyHost','proxyPort','proxyUsername'])field(key).value=parsed[key];field('proxyPassword').value=parsed.password;field('proxyEnabled').checked=true;field('proxyImport').value='';syncEnabled();showStatus('info','代理信息已导入','请点击“确定”保存到此账号。')
+   const parsed=parseSmartProxy(field('proxyImport').value,field('proxyType').value);for(const key of ['proxyType','proxyHost','proxyPort','proxyUsername'])field(key).value=parsed[key];field('proxyPassword').value=parsed.password;field('proxyEnabled').checked=true;field('proxyImport').value='';syncEnabled();showStatus('info','代理信息已导入','请点击“确定”保存到此账号。')
   }catch(error){reportError({field:'proxyImport',message:error.message})}
  };
- query('.proxy-test-button').onclick=()=>{
+ query('.proxy-test-button').onclick=async()=>{
   const values=readDraft(),error=validate(values);if(error){reportError(error);return}
-  showStatus('warning','网络尚未检测',values.proxyEnabled?'配置格式已检查。当前尚无法通过此账号的代理检测出口 IP 和延迟。':'代理已关闭。当前尚无法检测本机网络的出口 IP 和延迟。');
+  if(!window.zlDesktop?.proxyTest){showStatus('error','无法检测','请在 Windows 应用中使用代理检测');return}
+  const button=query('.proxy-test-button');button.disabled=true;showStatus('info','正在检测','通过当前配置请求出口 IP…');
+  try{const result=await window.zlDesktop.proxyTest(values);showStatus('info','检测成功','出口 IP：'+result.ip+'　延迟：'+result.latency+' ms（HTTP 请求耗时）')}catch(e){showStatus('error','检测失败',e.message)}finally{button.disabled=false}
+
  };
  query('.proxy-refresh-url').onclick=()=>{
   const values=readDraft();if(!values.proxyRefreshUrl.trim()){reportError({field:'proxyRefreshUrl',message:'请先填写刷新 URL。'});return}
   const error=validate(values);if(error){reportError(error);return}showStatus('warning','刷新 URL 尚未调用','当前不会调用此链接；代理 IP 刷新需桌面版接入。');
  };
  query('.proxy-cancel-button').onclick=onCancel;
- form.onsubmit=e=>{
+ form.onsubmit=async e=>{
   e.preventDefault();const values=readDraft(),error=validate(values);if(error){reportError(error);return}
-  try{if(onSave(profile.id,proxySettings(values),{password:values.proxyPassword,refreshUrl:values.proxyRefreshUrl.trim()})===false)showStatus('error','配置未保存','请检查浏览器存储后重试。')}catch(error){showStatus('error','配置未保存',error.message)}
+  const submit=form.querySelector('[type=submit]');submit.disabled=true;
+  try{if(await onSave(profile.id,proxySettings(values),{password:values.proxyPassword,refreshUrl:values.proxyRefreshUrl.trim()})===false)showStatus('error','配置未保存','请检查浏览器存储后重试。')}catch(error){showStatus('error','配置未保存',error.message)}finally{submit.disabled=false}
  };
  syncEnabled();resetStatus();
+ if(window.zlDesktop?.proxyGet){
+  query('.proxy-demo-note').textContent='保存后仅重载当前账号；密码在本机加密保存。代理失败不会自动切换直连。';
+  const controls=[...form.querySelectorAll('input,select,button,textarea')];controls.forEach(e=>e.disabled=true);
+  window.zlDesktop.proxyGet({platform,id:profile.id}).then(c=>{if(c){for(const key of ['proxyType','proxyHost','proxyPort','proxyUsername','proxyPassword'])field(key).value=c[key]||'';field('proxyEnabled').checked=c.proxyEnabled;baseline=JSON.stringify(readDraft());syncEnabled()}}).catch(e=>showStatus('error','读取失败',e.message)).finally(()=>controls.forEach(e=>e.disabled=false));
+ }
+
  return {element:form,profileId:profile.id,isDirty:()=>JSON.stringify(readDraft())!==baseline||Boolean(field('proxyImport').value)};
 }
