@@ -1,4 +1,4 @@
-const {AccountSessions,partitionFor}=require('./account-sessions.cjs');
+const {AccountSessions,partitionFor,browserUserAgent}=require('./account-sessions.cjs');
 const {startMetadataMonitor}=require('./whatsapp-metadata.cjs');
 const {app,BrowserWindow,protocol,net,ipcMain,Tray,Menu,WebContentsView,session,Notification,nativeTheme,dialog,shell,clipboard,safeStorage}=require('electron');
 const {createTranslationService}=require('./translation-service.cjs');
@@ -12,6 +12,8 @@ const {measureNetwork}=require('./network-status.cjs');
 const {runAction,validateAction}=require('./whatsapp-actions.cjs');
 const path=require('node:path'),fs=require('node:fs'),{pathToFileURL}=require('node:url');
 const originalUserData=app.getPath('userData');app.setName('ZL Multi Manager');app.setPath('userData',originalUserData);
+// Apply after branding changes, before creating any sessions or windows.
+app.userAgentFallback=browserUserAgent(app.userAgentFallback);
 protocol.registerSchemesAsPrivileged([{scheme:'zl',privileges:{standard:true,secure:true,supportFetchAPI:true}}]);
 let win,tray,quitting=false,prefs={closeBehavior:'tray',autoStart:false};
 if(!app.requestSingleInstanceLock())app.quit();

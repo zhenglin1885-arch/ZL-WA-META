@@ -3,10 +3,10 @@ import assert from 'node:assert/strict';
 import {EventEmitter} from 'node:events';
 import {createRequire} from 'node:module';
 const require=createRequire(import.meta.url);
-const {AccountSessions,partitionFor,allowedURL,clampBounds,browserUserAgent,fitZoom}=require('../desktop/account-sessions.cjs');
+const {AccountSessions,partitionFor,allowedURL,clampBounds,browserUserAgent,fitZoom,unsupportedBrowserHeading}=require('../desktop/account-sessions.cjs');
 function fixture(startMetadataMonitor){const attached=new Set(),views=[],statuses=[];class WC extends EventEmitter{constructor(s){super();this.session=s;this.urls=[]}loadURL(url){this.urls.push(url);return Promise.resolve()}getUserAgent(){return "Mozilla/5.0 Chrome/150.0.0.0 Electron/44.9.0 zl-multi-manager/0.2.0"}setUserAgent(ua){this.ua=ua}setZoomMode(mode){this.zoomMode=mode}setZoomFactor(factor){this.zoomFactor=factor}executeJavaScript(){return Promise.resolve(false)}setWindowOpenHandler(h){this.popup=h}isDestroyed(){return !!this.closed}close(){this.closed=true}reload(){this.reloaded=true}}
 class View{constructor(o){this.options=o;this.webContents=new WC(o.webPreferences.session);views.push(this)}setBounds(b){this.bounds=b}}
-const sessions=new Map();const session={fromPartition(p){if(!sessions.has(p))sessions.set(p,{setPermissionRequestHandler(){},setPermissionCheckHandler(){}});return sessions.get(p)}};
+const sessions=new Map();const session={fromPartition(p){if(!sessions.has(p))sessions.set(p,{getUserAgent(){return 'Mozilla/5.0 Chrome/150.0.0.0 Electron/44.9.0 ZLMultiManager/0.2.0'},setUserAgent(value){this.ua=value},setPermissionRequestHandler(){},setPermissionCheckHandler(){}});return sessions.get(p)}};
 const win={getContentSize:()=>[1000,700],contentView:{addChildView:v=>attached.add(v),removeChildView:v=>attached.delete(v)}};
 return {manager:new AccountSessions({win,WebContentsView:View,session,startMetadataMonitor,notify:s=>statuses.push(s)}),views,attached,statuses,sessions}}
 const account=(id,platform='whatsapp')=>({id,platform,sleeping:false});
@@ -52,3 +52,20 @@ test('metadata stays account-scoped and stale callbacks cannot update a sleeping
 });
 
 test('proxy configuration completes before login URL loads; failed apply never loads it',async()=>{const f=fixture();let release;f.manager.configureProxy=()=>new Promise(r=>release=r);f.manager.sync([{...account('a'),proxyEnabled:true}]);await Promise.resolve();assert.equal(f.views[0].webContents.urls.length,0);release();await new Promise(r=>setImmediate(r));assert.equal(f.views[0].webContents.urls.length,1);f.manager.configureProxy=async()=>{throw Error('proxy rejected')};f.manager.sync([{...account('a'),proxyEnabled:true,proxyRevision:'new'}]);await new Promise(r=>setImmediate(r));assert.equal(f.views[1].webContents.urls.length,0);assert.equal(f.statuses.at(-1).state,'blocked');f.manager.dispose()});
+
+// Electron removes spaces from app.setName when constructing its product token.
+test('branded packaged app UA is normalized at both session and page level',()=>{
+ const expected='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/150.0.0.0 Safari/537.36';
+ for(const name of ['zl-multi-manager','ZLMultiManager','ZL Multi Manager']){
+  const actual=expected.replace(' Chrome/',` ${name}/0.2.0 Chrome/`).replace(' Safari/',' Electron/44.9.0 Safari/');
+  assert.equal(browserUserAgent(actual),expected);
+ }
+ const f=fixture();f.manager.sync([account('a')]);
+ assert.doesNotMatch(f.views[0].webContents.session.ua,/Electron|ZLMultiManager/);
+ assert.doesNotMatch(f.views[0].webContents.ua,/Electron|zl-multi-manager/);
+});
+test('actual unsupported heading from screenshot is recognized',()=>{
+ assert.equal(unsupportedBrowserHeading('WhatsApp works with Google Chrome 100+'),true);
+ assert.equal(unsupportedBrowserHeading('WhatsApp supports Chrome 100+'),true);
+ assert.equal(unsupportedBrowserHeading('WhatsApp'),false);
+});

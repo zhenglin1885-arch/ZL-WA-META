@@ -5,7 +5,8 @@ function partitionFor(platform,id){return 'persist:zl-'+createHash('sha256').upd
 function allowedURL(value,platform){try{const u=new URL(value);const hosts=platform==='whatsapp'?['whatsapp.com']:['facebook.com','instagram.com','meta.com'];return u.protocol==='https:'&&!u.username&&!u.password&&hosts.some(h=>u.hostname===h||u.hostname.endsWith('.'+h))}catch{return false}}
 function clampBounds(rect,size){if(!rect||!['x','y','width','height'].every(k=>Number.isFinite(rect[k])))return null;const x=Math.max(0,Math.min(size[0],Math.round(rect.x))),y=Math.max(0,Math.min(size[1],Math.round(rect.y)));const width=Math.max(0,Math.min(size[0]-x,Math.round(rect.width))),height=Math.max(0,Math.min(size[1]-y,Math.round(rect.height)));return width>0&&height>0?{x,y,width,height}:null}
 // Keep the real Chromium version and OS; remove only desktop application product tokens.
-function browserUserAgent(value){return String(value).replace(/\s(?:Electron|zl-multi-manager)\/[^\s]+/gi,'')}
+function browserUserAgent(value){return String(value).replace(/\s(?:Electron|zl[- ]?multi[- ]?manager)\/[^\s]+/gi,'')}
+function unsupportedBrowserHeading(text){return /Chrome\s*100\s*\+/i.test(text)&&/(works with|support|支持|更高版本|newer)/i.test(text)}
 function fitZoom(bounds){return Math.max(0.7,Math.min(1,bounds.width/1100,bounds.height/780))}
 class AccountSessions{
  constructor({win,WebContentsView,session,notify,startMetadataMonitor,startTranslationMonitor,configureProxy}){Object.assign(this,{win,WebContentsView,session,notify,startMetadataMonitor,startTranslationMonitor,configureProxy});this.items=new Map();this.metadata=new Map();this.layout=null;this.attached=null}
@@ -21,6 +22,7 @@ class AccountSessions{
    if(a.sleeping){this.emit(item,'sleeping','当前会话已休眠，登录数据保留。');continue}
    if(blocked){this.emit(item,'blocked','该账号启用了尚未接入的代理。为避免改用直连，已停止加载；请关闭此账号的代理设置后重试。');continue}
    const ses=this.session.fromPartition(partitionFor(a.platform,a.id));
+   ses.setUserAgent(browserUserAgent(ses.getUserAgent()));
    ses.setPermissionRequestHandler((_wc,_permission,callback)=>callback(false));
    ses.setPermissionCheckHandler(()=>false);
    const view=new this.WebContentsView({webPreferences:{session:ses,nodeIntegration:false,contextIsolation:true,sandbox:true,webSecurity:true,backgroundThrottling:false}});item.view=view;
@@ -30,7 +32,7 @@ class AccountSessions{
    wc.on('did-stop-loading',()=>{if(this.items.get(key)===item&&item.state==='loading')this.emit(item,'ready','页面已打开，登录状态以 WhatsApp 页面为准。')});
    wc.on('dom-ready',async()=>{if(this.items.get(key)!==item)return;this.emit(item,'ready','页面已打开，等待确认登录。');
     // Return only a boolean; never send page text, credentials or chat content to the app.
-    try{const unsupported=await wc.executeJavaScript(`Array.from(document.querySelectorAll('h1,h2,[role="heading"]')).some(e=>/Chrome.*100/s.test(e.textContent||'')&&/(支持|support|更高版本|newer)/i.test(e.textContent||''))`);if(unsupported&&this.items.get(key)===item)this.emit(item,'incompatible','内置浏览器兼容性异常，当前无法登录。')}catch{}
+    try{const unsupported=await wc.executeJavaScript(`Array.from(document.querySelectorAll('h1,h2,[role="heading"]')).some(e=>(${unsupportedBrowserHeading.toString()})(e.textContent||''))`);if(unsupported&&this.items.get(key)===item)this.emit(item,'incompatible','内置浏览器兼容性异常，当前无法登录。')}catch{}
    });
    wc.on('did-fail-load',(_e,code,_description,_url,isMainFrame)=>{if(isMainFrame&&code!==-3&&this.items.get(key)===item)this.emit(item,'error','官方页面加载失败（'+code+'）。请检查网络后点击重新加载。')});
    wc.on('render-process-gone',()=>{if(this.items.get(key)===item)this.emit(item,'error','页面进程已停止，请重新加载。')});
@@ -65,4 +67,4 @@ class AccountSessions{
  destroy(item){item.destroyed=true;item.closeProxy?.()?.catch(()=>{});item.stopMetadata?.();item.stopTranslation?.();if(this.attached===item.view){this.win.contentView.removeChildView(item.view);this.attached=null}this.items.delete(item.key);for(const p of item.popups)p.destroy();if(item.view&&!item.view.webContents.isDestroyed())item.view.webContents.close({waitForBeforeUnload:false})}
  dispose(){for(const item of [...this.items.values()])this.destroy(item)}
 }
-module.exports={AccountSessions,keyOf,partitionFor,allowedURL,clampBounds,browserUserAgent,fitZoom};
+module.exports={AccountSessions,keyOf,partitionFor,allowedURL,clampBounds,browserUserAgent,fitZoom,unsupportedBrowserHeading};
