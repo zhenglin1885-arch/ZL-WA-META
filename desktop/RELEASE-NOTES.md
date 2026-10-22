@@ -1,9 +1,9 @@
-# 未发布：登录兼容修复
+# 1.2.0
 
 - 修复应用改名后 UA 中 ZLMultiManager 产品标识未被清理的问题。Electron v44.9.0 的 shell/common/application_info.cc 会移除应用名中的空格；原规则只匹配 zl-multi-manager。
 - 在全局、账号 session 和 webContents 层统一清理应用标识，保留实际 Chromium 版本及系统信息。账号分区与登录数据目录保持不变。
 - 兼容错误页识别补上截图中的 “WhatsApp works with Google Chrome 100+” 文案。
-- 88 项自动化测试通过；已复现标识清理缺陷，尚未实机证明它是截图问题的唯一原因。修复尚未包含在 R11 Release 安装包中。
+- 88 项自动化测试通过；已复现标识清理缺陷，尚未实机证明它是截图问题的唯一原因。本次打包包含上述修复，版本统一为 1.2.0。
 
 # 0.2.0-R11
 

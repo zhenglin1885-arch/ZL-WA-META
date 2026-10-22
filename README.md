@@ -1,6 +1,6 @@
 # ZL Multi Manager
 
-Windows Electron 多账号管理应用。当前源码版本：0.2.0-R11。
+Windows Electron 多账号管理应用。当前源码版本：1.2.0。
 
 ## 启动与构建
 

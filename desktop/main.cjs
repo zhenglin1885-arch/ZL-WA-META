@@ -60,7 +60,7 @@ else {
   function recordSessionStatus(status){
    sessionDiagnostics.push({time:new Date().toISOString(),account:partitionFor(status.platform,status.id),state:status.state,message:status.message,metadataSync:status.metadataSync,avatarStatus:status.metadata?.avatarStatus,avatarSource:status.metadata?.avatarSource});
    if(sessionDiagnostics.length>200)sessionDiagnostics.shift();
-   try{fs.writeFileSync(path.join(app.getPath('userData'),'session-diagnostics.json'),JSON.stringify({build:'0.2.0-R11',electron:process.versions.electron,chrome:process.versions.chrome,events:sessionDiagnostics},null,2))}catch{}
+   try{fs.writeFileSync(path.join(app.getPath('userData'),'session-diagnostics.json'),JSON.stringify({build:'1.2.0',electron:process.versions.electron,chrome:process.versions.chrome,events:sessionDiagnostics},null,2))}catch{}
   }
   const proxyService=createProxyService({directory:app.getPath('userData'),safeStorage,session});let lastAccounts=[];
   const accounts=new AccountSessions({configureProxy:proxyService.configure,win,WebContentsView,session,startMetadataMonitor,startTranslationMonitor:(wc,id)=>startTranslationMonitor(wc,id,translationService),notify:status=>{recordSessionStatus(status);notifyAccount(status);if(!win.isDestroyed())win.webContents.send('account-status',status)}});
@@ -75,7 +75,7 @@ else {
   ipcMain.handle('cache-stats',e=>{trusted(e);return translationService.cacheStats()});
   ipcMain.handle('cache-clear',async e=>{trusted(e);translationService.clearCache();for(const item of accounts.items.values())if(item.platform==='whatsapp'&&item.view)try{await item.view.webContents.executeJavaScript("globalThis.__zlTranslation?.seen.clear();document.querySelectorAll('.zl-received-translation').forEach(e=>e.remove())")}catch{}return true});
   ipcMain.handle('performance-get',e=>{trusted(e);const metrics=app.getAppMetrics();return {cpu:metrics.reduce((n,m)=>n+(m.cpu?.percentCPUUsage||0),0),memory:metrics.reduce((n,m)=>n+(m.memory?.workingSetSize||0)*1024,0),processes:metrics.length,uptime:process.uptime()}});
-  const updater=createUpdateService({fetch:(u,o)=>net.fetch(u,o),directory:path.join(app.getPath('userData'),'updates'),currentVersion:'0.2.0-R11',launch:file=>new Promise((resolve,reject)=>{if(process.platform!=='win32'){reject(Error('在线安装仅支持 Windows'));return}const child=spawn(file,[],{detached:true,stdio:'ignore'});child.once('error',()=>reject(Error('无法启动更新安装程序')));child.once('spawn',()=>{child.unref();resolve()})}),quit:()=>{quitting=true;app.quit()}});
+  const updater=createUpdateService({fetch:(u,o)=>net.fetch(u,o),directory:path.join(app.getPath('userData'),'updates'),currentVersion:'1.2.0',launch:file=>new Promise((resolve,reject)=>{if(process.platform!=='win32'){reject(Error('在线安装仅支持 Windows'));return}const child=spawn(file,[],{detached:true,stdio:'ignore'});child.once('error',()=>reject(Error('无法启动更新安装程序')));child.once('spawn',()=>{child.unref();resolve()})}),quit:()=>{quitting=true;app.quit()}});
   ipcMain.handle('update-check',e=>{trusted(e);return updater.check()});
   ipcMain.handle('update-install',e=>{trusted(e);return updater.install(progress=>{if(!win.isDestroyed())win.webContents.send('update-progress',progress)})});
   for(const event of ['resize','move','maximize','unmaximize','restore'])win.on(event,()=>{accounts.paint();win.webContents.send('layout-request')});
